@@ -8,6 +8,7 @@ const RegisterPage = () => {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
     inviteCode: ''
@@ -57,6 +58,7 @@ const RegisterPage = () => {
         registerUser({
           fullName: formData.fullName,
           email: formData.email,
+          phone: formData.phone,
           password: formData.password,
           inviteCode: formData.inviteCode || undefined,
         })
@@ -116,6 +118,25 @@ const RegisterPage = () => {
                 value={formData.email} onChange={handleChange}
                 className="w-full bg-gray-50 border border-gray-200 text-gs-navy rounded-xl py-3 pl-10 pr-4 focus:border-gs-teal focus:ring-1 focus:ring-gs-teal outline-none transition-all placeholder-gray-400"
                 placeholder="enter@email.com"
+              />
+            </div>
+          </div>
+
+          {/* Phone */}
+          <div className="group">
+            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider group-focus-within:text-gs-teal transition-colors">Phone Number</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Mail size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
+              </div>
+              <input
+                type="tel"
+                name="phone"
+                required
+                value={formData.phone}
+                onChange={handleChange}
+                className="w-full bg-gray-50 border border-gray-200 text-gs-navy rounded-xl py-3 pl-10 pr-4 focus:border-gs-teal focus:ring-1 focus:ring-gs-teal outline-none transition-all placeholder-gray-400"
+                placeholder="Your phone number"
               />
             </div>
           </div>

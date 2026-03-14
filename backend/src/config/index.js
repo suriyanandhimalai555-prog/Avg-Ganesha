@@ -25,6 +25,7 @@ export const corsConfig = Object.freeze({
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:5175',
+    'https://donate.agilavetriganesha.com'
   ]
     .filter(Boolean)
     .map((o) => o?.trim()),

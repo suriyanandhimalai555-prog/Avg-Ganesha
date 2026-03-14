@@ -15,9 +15,10 @@ function generateInviteCode() {
 /**
  * Register a new user. Returns { user, token } or throws.
  */
-export async function registerUser({ email, password, fullName, inviteCode }) {
+export async function registerUser({ email, password, fullName, phone, inviteCode }) {
   const normalizedEmail = email?.trim().toLowerCase();
   const normalizedFullName = fullName?.trim();
+  const normalizedPhone = phone?.trim();
   const normalizedInviteCode = inviteCode?.trim().toUpperCase();
 
   const client = await pool.connect();
@@ -48,10 +49,10 @@ export async function registerUser({ email, password, fullName, inviteCode }) {
     const newInviteCode = generateInviteCode();
 
     const newUserRes = await client.query(
-      `INSERT INTO users (email, password_hash, full_name, invite_code, invited_by)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, email, role, invite_code, full_name, invite_count`,
-      [normalizedEmail, hashedPassword, normalizedFullName, newInviteCode, inviterId]
+      `INSERT INTO users (email, password_hash, full_name, phone_number, invite_code, invited_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, email, role, full_name, phone_number, invite_code, invite_count`,
+      [normalizedEmail, hashedPassword, normalizedFullName, normalizedPhone, newInviteCode, inviterId]
     );
     const newUser = newUserRes.rows[0];
 
@@ -88,7 +89,7 @@ export async function loginUser({ email, password }) {
   const normalizedEmail = email?.trim().toLowerCase();
 
   const result = await pool.query(
-    `SELECT id, email, password_hash, role, full_name, invite_code, invite_count
+    `SELECT id, email, password_hash, role, full_name, phone_number AS phone, invite_code, invite_count
      FROM users WHERE email = $1`,
     [normalizedEmail]
   );
@@ -116,7 +117,7 @@ export async function loginUser({ email, password }) {
  */
 export async function getUserById(id) {
   const result = await pool.query(
-    `SELECT id, email, role, full_name, invite_code, invite_count FROM users WHERE id = $1`,
+    `SELECT id, email, role, full_name, phone_number AS phone, invite_code, invite_count FROM users WHERE id = $1`,
     [id]
   );
   if (result.rows.length === 0) return null;
@@ -135,6 +136,7 @@ function toUserDto(row) {
     email: row.email,
     role: row.role,
     fullName: row.full_name,
+    phone: row.phone || null,
     inviteCode: row.invite_code,
     inviteCount: row.invite_count ?? 0,
   };

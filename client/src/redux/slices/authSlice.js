@@ -30,11 +30,12 @@ export const loginUser = createAsyncThunk(
 
 export const registerUser = createAsyncThunk(
   'auth/register',
-  async ({ fullName, email, password, inviteCode }, { rejectWithValue }) => {
+  async ({ fullName, email, phone, password, inviteCode }, { rejectWithValue }) => {
     try {
       const data = await authService.register({
         fullName,
         email,
+        phone,
         password,
         inviteCode: inviteCode || undefined,
       });

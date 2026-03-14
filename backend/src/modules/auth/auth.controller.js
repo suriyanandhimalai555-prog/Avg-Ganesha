@@ -5,12 +5,13 @@ import * as authService from './auth.service.js';
 import { AUTH_ERRORS } from '../../config/constants.js';
 
 export const register = async (req, res) => {
-  const { email, password, fullName, inviteCode } = req.body;
+  const { email, password, fullName, phone, inviteCode } = req.body;
   try {
     const { user, token } = await authService.registerUser({
       email,
       password,
       fullName,
+      phone,
       inviteCode,
     });
     res.status(201).json({
