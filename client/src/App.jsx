@@ -44,54 +44,55 @@ function AppContent() {
   }, [dispatch, navigate]);
 
   return (
-      <Routes>
-        {/* Global Layout Wrapper */}
-        <Route element={<DashboardLayout />}>
-          {/* ===== PUBLIC ROUTES ===== */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/plans" element={<PlansPage />} />
-          <Route path="/donate" element={<DonatePage />} />
+    <Routes>
+      {/* Admin routes: no user dashboard layout/sidebar */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <AdminPage />
+          </ProtectedRoute>
+        }
+      />
 
-          {/* ===== ADMIN ROUTE ===== */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={['ADMIN']}>
-                <AdminPage />
-              </ProtectedRoute>
-            }
-          />
+      {/* Global Layout Wrapper for devotee portal */}
+      <Route element={<DashboardLayout />}>
+        {/* ===== PUBLIC ROUTES ===== */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/plans" element={<PlansPage />} />
+        <Route path="/donate" element={<DonatePage />} />
 
-          {/* ===== USER DASHBOARD ROUTES ===== */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute allowedRoles={['USER', 'ADMIN']}>
-                {/* DashboardLayout is now wrapping everything, so these routes render directly inside the Outlet */}
-                <Outlet />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<DashboardPage />} />
-            <Route path="network" element={<NetworkPage />} />
-            <Route path="kyc" element={<KycPage />} />
-          </Route>
-
-          {/* Root redirect */}
-          <Route
-            path="/"
-            element={
-              token && user
-                ? (user.role === 'ADMIN' ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />)
-                : <Navigate to="/donate" replace />
-            }
-          />
-
-          {/* Catch-All */}
-          <Route path="*" element={<NotFoundPage />} />
+        {/* ===== USER DASHBOARD ROUTES ===== */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={['USER', 'ADMIN']}>
+              <Outlet />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<DashboardPage />} />
+          <Route path="network" element={<NetworkPage />} />
+          <Route path="kyc" element={<KycPage />} />
         </Route>
-      </Routes>
+
+        {/* Root redirect */}
+        <Route
+          path="/"
+          element={
+            token && user
+              ? user.role === 'ADMIN'
+                ? <Navigate to="/admin" replace />
+                : <Navigate to="/dashboard" replace />
+              : <Navigate to="/donate" replace />
+          }
+        />
+
+        {/* Catch-All */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
     );
 }
 

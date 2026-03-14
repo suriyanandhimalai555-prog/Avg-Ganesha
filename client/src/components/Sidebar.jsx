@@ -89,19 +89,6 @@ const Sidebar = ({ isOpen, onClose }) => {
 
         {/* Navigation */}
         <nav className="flex-1 mt-6 overflow-y-auto custom-scrollbar px-2 space-y-1">
-          {isAdmin && (
-            <div className="mb-6 mx-4 p-1 rounded-xl border-2 border-gs-teal/30 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gs-teal/5 group-hover:bg-gs-teal/10 transition-colors pointer-events-none" />
-              <button
-                onClick={() => navigate('/admin')}
-                className="w-full flex items-center justify-center space-x-2 py-2.5 text-gs-teal hover:text-[#1A7566] font-bold uppercase tracking-wider text-xs transition-colors"
-              >
-                <ShieldCheck size={16} />
-                <span>Admin Portal</span>
-              </button>
-            </div>
-          )}
-
           {isLoggedIn && <NavItem icon={Home} label="Dashboard" path="/dashboard" />}
           {isLoggedIn && <NavItem icon={Users} label="Your Invite Network" path="/dashboard/network" />}
           <NavItem icon={Heart} label="Donate / Contribute" path="/donate" />

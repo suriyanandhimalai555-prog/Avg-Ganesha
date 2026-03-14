@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
 import { API_ROUTES } from '../config/api';
-import { UserPlus, Shield, Heart, Award } from 'lucide-react';
+import { Shield, Heart, Award } from 'lucide-react';
 import { useSelector } from 'react-redux';
 
 const DashboardPage = () => {
@@ -64,10 +64,8 @@ const DashboardPage = () => {
 
       {/* Stats Row */}
       <div className="flex flex-col lg:flex-row gap-8">
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
           <InfoCard title="Devotee Name" value={user.fullName || 'Devotee'} colorClass="text-gs-navy" />
-          <InfoCard title="Invite Count" value={inviteCount} colorClass="text-gs-teal" />
-          <InfoCard title="Your Invite Code" value={inviteStats?.invite_code || user.inviteCode || '—'} colorClass="text-[#1A7566]" />
           <div className="bg-white border border-gray-100 rounded-2xl p-6 flex flex-col justify-center shadow-sm hover:shadow-md h-32">
             <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-bold mb-3">KYC Status</p>
             <div className="flex items-center gap-2">
@@ -115,8 +113,8 @@ const DashboardPage = () => {
               <Award className="text-gs-gold" size={24} />
             </div>
             <div>
-              <p className="text-gray-400 text-xs uppercase tracking-wider font-bold mb-1">1.5 Ft Statues Funded (Global)</p>
-              <p className="text-2xl font-bold font-serif text-gs-navy">{donationStats.globalStatue15FtFunded ?? 0}</p>
+              <p className="text-gray-400 text-xs uppercase tracking-wider font-bold mb-1">Your 1.5 Ft Statues</p>
+              <p className="text-2xl font-bold font-serif text-gs-navy">{donationStats.statue15FtCount ?? 0}</p>
             </div>
           </div>
           {donationStats.breakdown?.length > 0 ? (
@@ -138,28 +136,6 @@ const DashboardPage = () => {
           )}
         </div>
       )}
-
-      {/* Invite Network mini-section */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
-          <div className="w-14 h-14 rounded-full bg-gs-teal/10 flex items-center justify-center text-gs-teal">
-            <UserPlus size={24} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-xs uppercase tracking-wider font-bold mb-1">Devotees You've Invited</p>
-            <p className="text-3xl font-bold font-serif text-gs-navy">{inviteCount}</p>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
-          <div className="w-14 h-14 rounded-full bg-gs-gold/10 flex items-center justify-center text-gs-gold text-2xl">
-            🕉️
-          </div>
-          <div>
-            <p className="text-gray-400 text-xs uppercase tracking-wider font-bold mb-1">Daily Mantra</p>
-            <p className="text-sm text-gs-navy font-serif italic font-medium tracking-wide">॥ ॐ गं गणपतये नमः ॥</p>
-          </div>
-        </div>
-      </div>
 
       {/* Ganesha Hero Image */}
       <div className="flex justify-center mt-8">

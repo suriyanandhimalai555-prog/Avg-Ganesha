@@ -143,7 +143,7 @@ export const getMyDonationStats = async (req, res) => {
   }
 };
 
-// --- Admin: list pending donations ---
+// --- Admin: list donations (used for pending + history) ---
 export const getPendingDonations = async (req, res) => {
   try {
     const result = await query(
@@ -153,8 +153,7 @@ export const getPendingDonations = async (req, res) => {
        FROM donations d
        LEFT JOIN donation_categories dc ON d.category_id = dc.id
        JOIN users u ON d.user_id = u.id
-       WHERE d.status = 'PENDING'
-       ORDER BY d.created_at ASC`
+       ORDER BY d.created_at DESC`
     );
     res.json(result.rows);
   } catch (err) {

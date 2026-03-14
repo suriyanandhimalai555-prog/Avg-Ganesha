@@ -19,6 +19,13 @@ const RegisterPage = () => {
 
   const queryParams = new URLSearchParams(window.location.search);
   const redirectParams = queryParams.get('redirect');
+  const inviteFromUrl = queryParams.get('invite') || '';
+
+  useEffect(() => {
+    if (inviteFromUrl) {
+      setFormData((prev) => ({ ...prev, inviteCode: inviteFromUrl.trim() }));
+    }
+  }, [inviteFromUrl]);
 
   useEffect(() => {
     if (token && user) {

@@ -1,75 +1,55 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api from '../api/axios';
-import { UserPlus } from 'lucide-react';
 import { useSelector } from 'react-redux';
 
 const NetworkPage = () => {
   const [inviteStats, setInviteStats] = useState(null);
-  const [invitees, setInvitees] = useState([]);
   const { user, token } = useSelector((state) => state.auth);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!token) return;
       try {
-        const [statsRes] = await Promise.all([
-          api.get('/api/invites/stats')
-        ]);
-        setInviteStats(statsRes.data);
+        const res = await api.get('/api/invites/stats').catch(() => ({ data: null }));
+        setInviteStats(res?.data || null);
       } catch (e) {
         console.error('Failed to load invite data', e);
       }
     };
     fetchData();
-  }, []);
+  }, [token]);
 
-  const inviteCount = inviteStats?.invite_count || 0;
-  const inviteCode = inviteStats?.invite_code || user.inviteCode || '—';
+  const inviteCode = inviteStats?.invite_code || user.inviteCode || '';
+  const inviteBaseUrl = useMemo(
+    () => import.meta.env.VITE_CLIENT_URL || window.location.origin,
+    []
+  );
+  const inviteLink = inviteCode
+    ? `${inviteBaseUrl.replace(/\/+$/, '')}/register?invite=${encodeURIComponent(inviteCode)}`
+    : `${inviteBaseUrl.replace(/\/+$/, '')}/register`;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-3xl p-8 relative overflow-hidden shadow-sm animate-fade-in">
-      <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-transparent via-gs-teal to-transparent opacity-60" />
-
-      <div className="flex flex-col items-center space-y-8">
-        <h3 className="text-2xl font-serif text-gs-navy font-bold border-b border-gray-100 pb-4 w-full text-center">
-          🐘 Your Invite Network
-        </h3>
-
-        {/* YOU Node */}
-        <div className="relative z-10 mt-6">
-          <div className="w-24 h-24 rounded-full bg-white border-4 border-gs-teal shadow-[0_10px_30px_rgba(45,156,138,0.2)] flex items-center justify-center text-4xl z-20 relative">
-            🕉️
-          </div>
-          <div className="absolute top-24 left-1/2 w-[3px] h-12 bg-gradient-to-b from-gs-teal to-transparent -translate-x-1/2 z-0 opacity-50" />
-        </div>
-
-        {/* Invite slots */}
-        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-8 relative z-10 w-full max-w-3xl shadow-inner">
-          <p className="text-center text-xs text-gs-teal uppercase tracking-widest mb-6 font-bold">
-            <UserPlus size={14} className="inline mr-1" />
-            Devotees You Invited ({inviteCount})
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            {[...Array(Math.max(10, inviteCount))].map((_, i) => (
-              <div
-                key={i}
-                className={`w-12 h-12 rounded-full flex items-center justify-center text-sm border-2 transition-all ${
-                  i < inviteCount
-                    ? 'bg-gs-teal border-gs-teal text-white font-extrabold shadow-[0_5px_15px_rgba(45,156,138,0.3)]'
-                    : 'bg-white border-gray-200 text-gray-400'
-                }`}
-              >
-                {i < inviteCount ? '🙏' : i + 1}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Invite Code */}
-        <div className="mt-4 px-8 py-4 bg-gs-teal/5 border border-gs-teal/20 rounded-full text-gs-navy font-mono text-lg tracking-widest shadow-sm">
-          Your Invite Code: <span className="font-bold text-gs-teal ml-2">{inviteCode}</span>
-        </div>
-
+    <div className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm animate-fade-in max-w-2xl mx-auto">
+      <h3 className="text-2xl font-serif text-gs-navy font-bold mb-4 text-center">
+        🐘 Your Invite Network
+      </h3>
+      <p className="text-sm text-gray-500 text-center mb-6">
+        Share this link with friends and family to invite them to Ganesha Seva.
+      </p>
+      <div className="flex flex-col sm:flex-row items-center gap-3">
+        <input
+          type="text"
+          readOnly
+          value={inviteLink}
+          className="flex-1 w-full text-sm bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-700"
+        />
+        <button
+          type="button"
+          onClick={() => navigator.clipboard.writeText(inviteLink)}
+          className="px-4 py-2.5 rounded-xl bg-gs-teal text-white font-bold hover:bg-[#1A7566] transition-colors w-full sm:w-auto"
+        >
+          Copy invite link
+        </button>
       </div>
     </div>
   );

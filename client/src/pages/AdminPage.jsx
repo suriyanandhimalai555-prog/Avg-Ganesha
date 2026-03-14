@@ -18,6 +18,14 @@ const AdminPage = () => {
   const [donationsLoading, setDonationsLoading] = useState(false);
   const [proofViewDonation, setProofViewDonation] = useState(null);
   const [kycViewUser, setKycViewUser] = useState(null);
+  const [bankDetails, setBankDetails] = useState({
+    bank_account_name: '',
+    bank_account_number: '',
+    bank_ifsc: '',
+    bank_branch: '',
+    bank_customer_id: '',
+  });
+  const [savingBank, setSavingBank] = useState(false);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -33,16 +41,25 @@ const AdminPage = () => {
       if (search) queryStr += `&search=${search}`;
       if (kycFilter !== 'ALL') queryStr += `&kycStatus=${kycFilter}`;
 
-      const [statsRes, usersRes, pendingRes] = await Promise.all([
+      const [statsRes, usersRes, pendingRes, bankRes] = await Promise.all([
         api.get('/api/admin/stats'),
         api.get(`/api/admin/users${queryStr}`),
         api.get(API_ROUTES.DONATIONS.ADMIN_PENDING).catch(() => ({ data: [] })),
+        api.get(API_ROUTES.SETTINGS).catch(() => ({ data: {} })),
       ]);
 
       setStats(statsRes.data);
       setPendingDonations(Array.isArray(pendingRes.data) ? pendingRes.data : []);
       setUsers(usersRes.data.data);
       setTotalPages(usersRes.data.pagination.totalPages);
+      setBankDetails((prev) => ({
+        ...prev,
+        bank_account_name: bankRes.data.bank_account_name || prev.bank_account_name,
+        bank_account_number: bankRes.data.bank_account_number || prev.bank_account_number,
+        bank_ifsc: bankRes.data.bank_ifsc || prev.bank_ifsc,
+        bank_branch: bankRes.data.bank_branch || prev.bank_branch,
+        bank_customer_id: bankRes.data.bank_customer_id || prev.bank_customer_id || '',
+      }));
     } catch (err) {
       console.error('Failed to fetch admin data', err);
       if (err.response?.status === 401 || err.response?.status === 403) handleLogout();
@@ -99,6 +116,24 @@ const AdminPage = () => {
     }
   };
 
+  const handleBankChange = (e) => {
+    const { name, value } = e.target;
+    setBankDetails((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSaveBankDetails = async () => {
+    setSavingBank(true);
+    try {
+      await api.put(API_ROUTES.SETTINGS, bankDetails);
+      alert('Account details updated.');
+    } catch (err) {
+      console.error('Failed to save bank details', err);
+      alert('Failed to save account details.');
+    } finally {
+      setSavingBank(false);
+    }
+  };
+
   const StatCard = ({ title, value, icon: Icon, colorClass, filterType }) => (
     <div
       onClick={() => { setKycFilter(filterType); setPage(1); }}
@@ -133,9 +168,6 @@ const AdminPage = () => {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <button onClick={() => navigate('/dashboard')} className="text-xs font-bold text-gray-500 hover:text-gs-teal transition px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-                → Devotee Portal
-              </button>
               <button onClick={handleLogout} className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-4 py-2 rounded-lg text-sm transition-all border border-red-100">
                 <LogOut size={16} /> Logout
               </button>
@@ -145,6 +177,61 @@ const AdminPage = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+
+        {/* Account details editor */}
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-8">
+          <h2 className="text-lg font-serif font-bold text-gs-navy mb-4">Donation Account Details</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Name</label>
+              <input
+                type="text"
+                name="bank_account_name"
+                value={bankDetails.bank_account_name}
+                onChange={handleBankChange}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Number</label>
+              <input
+                type="text"
+                name="bank_account_number"
+                value={bankDetails.bank_account_number}
+                onChange={handleBankChange}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Customer ID</label>
+              <input
+                type="text"
+                name="bank_customer_id"
+                value={bankDetails.bank_customer_id}
+                onChange={handleBankChange}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">IFSC Code</label>
+              <input
+                type="text"
+                name="bank_ifsc"
+                value={bankDetails.bank_ifsc}
+                onChange={handleBankChange}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveBankDetails}
+            disabled={savingBank}
+            className="mt-4 px-4 py-2 rounded-lg bg-gs-teal text-white font-bold text-sm hover:bg-[#1A7566] disabled:opacity-60"
+          >
+            {savingBank ? 'Saving...' : 'Save Account Details'}
+          </button>
+        </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-10">
@@ -161,10 +248,10 @@ const AdminPage = () => {
           </div>
         </div>
 
-        {/* Pending Donations */}
+        {/* Donations (pending + history) */}
         {pendingDonations?.length > 0 && (
           <div className="mb-10">
-            <h2 className="text-2xl font-bold font-serif text-gs-navy mb-4">Pending Donations</h2>
+            <h2 className="text-2xl font-bold font-serif text-gs-navy mb-4">Donations</h2>
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-100">
@@ -174,6 +261,7 @@ const AdminPage = () => {
                       <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Category</th>
                       <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Amount</th>
                       <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Status</th>
                       <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Payment Proof</th>
                       <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Actions</th>
                     </tr>
@@ -181,6 +269,19 @@ const AdminPage = () => {
                   <tbody>
                     {pendingDonations.map((d) => (
                       <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm">
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                              d.status === 'CONFIRMED'
+                                ? 'bg-green-50 text-green-700 border border-green-200'
+                                : d.status === 'REJECTED'
+                                ? 'bg-red-50 text-red-700 border border-red-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {d.status || 'PENDING'}
+                          </span>
+                        </td>
                         <td className="px-6 py-4">
                           <div>
                             <p className="font-bold text-gs-navy">{d.full_name}</p>
@@ -204,22 +305,26 @@ const AdminPage = () => {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleDonationReview(d.id, 'CONFIRMED')}
-                              disabled={donationsLoading}
-                              className="text-[10px] px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded font-bold hover:bg-green-100"
-                            >
-                              ✓ Approve
-                            </button>
-                            <button
-                              onClick={() => handleDonationReview(d.id, 'REJECTED')}
-                              disabled={donationsLoading}
-                              className="text-[10px] px-2 py-1 bg-red-50 text-red-700 border border-red-200 rounded font-bold hover:bg-red-100"
-                            >
-                              ✗ Reject
-                            </button>
-                          </div>
+                          {d.status === 'PENDING' ? (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleDonationReview(d.id, 'CONFIRMED')}
+                                disabled={donationsLoading}
+                                className="text-[10px] px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded font-bold hover:bg-green-100"
+                              >
+                                ✓ Approve
+                              </button>
+                              <button
+                                onClick={() => handleDonationReview(d.id, 'REJECTED')}
+                                disabled={donationsLoading}
+                                className="text-[10px] px-2 py-1 bg-red-50 text-red-700 border border-red-200 rounded font-bold hover:bg-red-100"
+                              >
+                                ✗ Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">Reviewed</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -491,17 +596,17 @@ const AdminPage = () => {
                               → User
                             </button>
                           )}
+                          {(u.kyc_docs?.front || u.kyc_docs?.back) && (
+                            <button
+                              type="button"
+                              onClick={() => setKycViewUser(u)}
+                              className="text-[10px] px-2 py-1 bg-gs-teal/10 text-gs-teal border border-gs-teal/20 rounded font-bold hover:bg-gs-teal/20 transition"
+                            >
+                              <Image size={10} className="inline mr-0.5" /> View docs
+                            </button>
+                          )}
                           {u.kyc_status === 'SUBMITTED' && (
                             <>
-                              {(u.kyc_docs?.front || u.kyc_docs?.back) && (
-                                <button
-                                  type="button"
-                                  onClick={() => setKycViewUser(u)}
-                                  className="text-[10px] px-2 py-1 bg-gs-teal/10 text-gs-teal border border-gs-teal/20 rounded font-bold hover:bg-gs-teal/20 transition"
-                                >
-                                  <Image size={10} className="inline mr-0.5" /> View docs
-                                </button>
-                              )}
                               <button
                                 onClick={() => handleKycReview(u.id, 'APPROVED')}
                                 className="text-[10px] px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded font-bold hover:bg-green-100 transition"
