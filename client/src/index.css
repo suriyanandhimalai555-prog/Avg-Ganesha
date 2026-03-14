@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #F9F6F0; /* gs-cream fallback */
+  color: #1A1A3E; /* gs-navy */
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(45, 156, 138, 0.05); /* gs-teal */
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(45, 156, 138, 0.3);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 156, 138, 0.6);
+}
+
+/* Devotional glow effect */
+.ganesha-glow {
+  box-shadow: 0 0 30px rgba(45, 156, 138, 0.15), 0 0 60px rgba(212, 175, 55, 0.05);
+}
+
+/* Om symbol animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Floral Confetti Background Pattern Generator via CSS variables */
+.bg-floral-confetti {
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(212, 175, 55, 0.1) 0%, transparent 8%),
+    radial-gradient(circle at 80% 10%, rgba(45, 156, 138, 0.08) 0%, transparent 6%),
+    radial-gradient(circle at 30% 60%, rgba(212, 175, 55, 0.12) 0%, transparent 10%),
+    radial-gradient(circle at 75% 80%, rgba(45, 156, 138, 0.08) 0%, transparent 8%),
+    radial-gradient(circle at 50% 40%, rgba(212, 175, 55, 0.05) 0%, transparent 5%);
+  background-attachment: fixed;
+}

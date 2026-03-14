@@ -1,0 +1,106 @@
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import { logout } from './redux/slices/authSlice';
+import { onSessionExpired } from './lib/authEvents';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import DashboardPage from './pages/DashboardPage';
+import AdminPage from './pages/AdminPage';
+import DashboardLayout from './components/DashboardLayout';
+import PlansPage from './pages/PlansPage';
+import NetworkPage from './pages/NetworkPage';
+import KycPage from './pages/KycPage';
+import NotFoundPage from './pages/NotFoundPage';
+import DonatePage from './pages/DonatePage';
+
+// Protects routes that require login + optionally a specific role
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user, token } = useSelector((state) => state.auth);
+
+  if (!token || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
+function AppContent() {
+  const { token, user } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const unsubscribe = onSessionExpired(() => {
+      dispatch(logout());
+      navigate('/login', { replace: true });
+    });
+    return unsubscribe;
+  }, [dispatch, navigate]);
+
+  return (
+      <Routes>
+        {/* Global Layout Wrapper */}
+        <Route element={<DashboardLayout />}>
+          {/* ===== PUBLIC ROUTES ===== */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/plans" element={<PlansPage />} />
+          <Route path="/donate" element={<DonatePage />} />
+
+          {/* ===== ADMIN ROUTE ===== */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ===== USER DASHBOARD ROUTES ===== */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['USER', 'ADMIN']}>
+                {/* DashboardLayout is now wrapping everything, so these routes render directly inside the Outlet */}
+                <Outlet />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<DashboardPage />} />
+            <Route path="network" element={<NetworkPage />} />
+            <Route path="kyc" element={<KycPage />} />
+          </Route>
+
+          {/* Root redirect */}
+          <Route
+            path="/"
+            element={
+              token && user
+                ? (user.role === 'ADMIN' ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />)
+                : <Navigate to="/donate" replace />
+            }
+          />
+
+          {/* Catch-All */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
+  );
+}
+
+export default App;
