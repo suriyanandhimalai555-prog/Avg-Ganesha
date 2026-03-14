@@ -6,6 +6,7 @@ const KycPage = () => {
   const [fileFront, setFileFront] = useState(null);
   const [fileBack, setFileBack] = useState(null);
   const [status, setStatus] = useState('LOADING');
+  const [rejectionReason, setRejectionReason] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -13,6 +14,7 @@ const KycPage = () => {
       try {
         const res = await api.get('/api/kyc/status');
         setStatus(res.data.status || 'PENDING');
+        setRejectionReason(res.data.rejectionReason);
       } catch (err) {
         console.error('Failed to fetch KYC status', err);
         setStatus('PENDING');
@@ -114,8 +116,10 @@ const KycPage = () => {
         <form onSubmit={handleSubmit} className="bg-white border border-gray-100 rounded-3xl p-8 space-y-8 shadow-sm">
 
           {status === 'REJECTED' && (
-            <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-red-700 text-sm text-center font-medium">
-              Your previous submission was rejected. Please ensure your ID is clear and try again.
+            <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-red-700 text-sm font-medium">
+              <p className="font-bold mb-1">Your previous submission was rejected.</p>
+              {rejectionReason && <p className="text-red-600 italic">{rejectionReason}</p>}
+              <p className="mt-2">Please ensure your ID is clear and try again.</p>
             </div>
           )}
 

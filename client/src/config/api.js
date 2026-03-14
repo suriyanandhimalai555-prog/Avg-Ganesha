@@ -15,4 +15,12 @@ export const API_ROUTES = Object.freeze({
   ADMIN: '/api/admin',
   PLANS: '/api/plans',
   SETTINGS: '/api/settings',
+  DONATIONS: {
+    CATEGORIES: '/api/donations/categories',
+    SUBMIT: '/api/donations/submit',
+    MY: '/api/donations/my',
+    MY_STATS: '/api/donations/my-stats',
+    ADMIN_PENDING: '/api/donations/admin/pending',
+    ADMIN_REVIEW: (id) => `/api/donations/admin/review/${id}`,
+  },
 });

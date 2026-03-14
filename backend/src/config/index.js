@@ -15,8 +15,8 @@ export const authConfig = Object.freeze({
 });
 
 export const rateLimitConfig = Object.freeze({
-  api: { windowMs: 15 * 60 * 1000, max: 100 },
-  auth: { windowMs: 15 * 60 * 1000, max: 10 }, // Stricter for auth endpoints
+  api: { windowMs: 15 * 60 * 1000, max: 500 },
+  auth: { windowMs: 15 * 60 * 1000, max: 50 },
 });
 
 export const corsConfig = Object.freeze({

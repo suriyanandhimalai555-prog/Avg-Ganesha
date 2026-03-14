@@ -3,16 +3,21 @@ import api from '../api/axios';
 import { useDispatch } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Users, LogOut, Search, Calendar, Mail, CheckCircle, Clock, FileText, UserCog } from 'lucide-react';
+import { API_BASE_URL, API_ROUTES } from '../config/api';
+import { Shield, Users, LogOut, Search, Calendar, Mail, CheckCircle, Clock, FileText, Heart, Image, X, ExternalLink } from 'lucide-react';
 
 const AdminPage = () => {
-  const [stats, setStats] = useState({ totalUsers: 0, submittedKYC: 0, approvedKYC: 0, totalInvited: 0 });
+  const [stats, setStats] = useState({ totalUsers: 0, submittedKYC: 0, approvedKYC: 0, totalInvited: 0, pendingDonations: 0 });
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [kycFilter, setKycFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [pendingDonations, setPendingDonations] = useState([]);
+  const [donationsLoading, setDonationsLoading] = useState(false);
+  const [proofViewDonation, setProofViewDonation] = useState(null);
+  const [kycViewUser, setKycViewUser] = useState(null);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -28,12 +33,14 @@ const AdminPage = () => {
       if (search) queryStr += `&search=${search}`;
       if (kycFilter !== 'ALL') queryStr += `&kycStatus=${kycFilter}`;
 
-      const [statsRes, usersRes] = await Promise.all([
+      const [statsRes, usersRes, pendingRes] = await Promise.all([
         api.get('/api/admin/stats'),
         api.get(`/api/admin/users${queryStr}`),
+        api.get(API_ROUTES.DONATIONS.ADMIN_PENDING).catch(() => ({ data: [] })),
       ]);
 
       setStats(statsRes.data);
+      setPendingDonations(Array.isArray(pendingRes.data) ? pendingRes.data : []);
       setUsers(usersRes.data.data);
       setTotalPages(usersRes.data.pagination.totalPages);
     } catch (err) {
@@ -60,12 +67,35 @@ const AdminPage = () => {
   };
 
   const handleKycReview = async (userId, status) => {
-    if (!window.confirm(`Mark this user's KYC as ${status}?`)) return;
+    let rejectionReason = null;
+    if (status === 'REJECTED') {
+      rejectionReason = window.prompt('Rejection reason (optional):');
+      if (rejectionReason === null) return;
+    } else if (!window.confirm(`Mark this user's KYC as ${status}?`)) return;
     try {
-      await api.post('/api/admin/kyc-review', { userId, status });
+      await api.post('/api/admin/kyc-review', { userId, status, rejectionReason });
+      setKycViewUser(null);
       fetchData();
     } catch (err) {
       alert('Failed to update KYC');
+    }
+  };
+
+  const handleDonationReview = async (donationId, status) => {
+    let rejectionReason = null;
+    if (status === 'REJECTED') {
+      rejectionReason = window.prompt('Rejection reason (optional):');
+      if (rejectionReason === null) return;
+    } else if (!window.confirm('Approve this donation?')) return;
+    setDonationsLoading(true);
+    try {
+      await api.post(API_ROUTES.DONATIONS.ADMIN_REVIEW(donationId), { status, rejectionReason });
+      setProofViewDonation(null);
+      fetchData();
+    } catch (err) {
+      alert('Failed to review donation');
+    } finally {
+      setDonationsLoading(false);
     }
   };
 
@@ -117,12 +147,255 @@ const AdminPage = () => {
       <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-10">
           <StatCard title="All Devotees" value={stats.totalUsers} icon={Users} colorClass="text-blue-500" filterType="ALL" />
-          <StatCard title="Needs Review" value={stats.submittedKYC} icon={FileText} colorClass="text-orange-500" filterType="SUBMITTED" />
+          <StatCard title="KYC Needs Review" value={stats.submittedKYC} icon={FileText} colorClass="text-orange-500" filterType="SUBMITTED" />
           <StatCard title="Verified" value={stats.approvedKYC} icon={CheckCircle} colorClass="text-green-500" filterType="APPROVED" />
           <StatCard title="Total Invited" value={stats.totalInvited} icon={Users} colorClass="text-purple-500" filterType="ALL" />
+          <div className="bg-white border border-amber-200 shadow-sm p-6 rounded-2xl flex items-center justify-between relative overflow-hidden group cursor-default">
+            <div>
+              <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Pending Donations</h3>
+              <p className="text-3xl font-bold font-serif text-amber-600">{stats.pendingDonations ?? 0}</p>
+            </div>
+            <div className="p-4 rounded-xl bg-amber-50 text-amber-600"><Heart size={24} /></div>
+          </div>
         </div>
+
+        {/* Pending Donations */}
+        {pendingDonations?.length > 0 && (
+          <div className="mb-10">
+            <h2 className="text-2xl font-bold font-serif text-gs-navy mb-4">Pending Donations</h2>
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-100">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Donor</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Category</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Payment Proof</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingDonations.map((d) => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-bold text-gs-navy">{d.full_name}</p>
+                            <p className="text-xs text-gray-500">{d.email}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm">{d.category_name}</td>
+                        <td className="px-6 py-4 font-bold text-gs-teal">₹{parseFloat(d.amount).toLocaleString('en-IN')}</td>
+                        <td className="px-6 py-4 text-sm text-gray-500">{new Date(d.created_at).toLocaleDateString()}</td>
+                        <td className="px-6 py-4">
+                          {d.payment_proof_path ? (
+                            <button
+                              type="button"
+                              onClick={() => setProofViewDonation(d)}
+                              className="inline-flex items-center gap-1 text-gs-teal font-bold hover:underline"
+                            >
+                              <Image size={16} /> View photo
+                            </button>
+                          ) : (
+                            <span className="text-gray-400 text-sm">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleDonationReview(d.id, 'CONFIRMED')}
+                              disabled={donationsLoading}
+                              className="text-[10px] px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded font-bold hover:bg-green-100"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              onClick={() => handleDonationReview(d.id, 'REJECTED')}
+                              disabled={donationsLoading}
+                              className="text-[10px] px-2 py-1 bg-red-50 text-red-700 border border-red-200 rounded font-bold hover:bg-red-100"
+                            >
+                              ✗ Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* KYC documents viewer modal */}
+        {kycViewUser && (kycViewUser.kyc_docs?.front || kycViewUser.kyc_docs?.back) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setKycViewUser(null)}>
+            <div
+              className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h3 className="text-lg font-bold text-gs-navy">KYC documents — {kycViewUser.full_name}</h3>
+                  <p className="text-sm text-gray-500">{kycViewUser.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setKycViewUser(null)}
+                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                  aria-label="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto p-4 bg-gray-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {kycViewUser.kyc_docs?.front && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">ID Front</p>
+                    <img
+                      src={`${API_BASE_URL}/uploads/${kycViewUser.kyc_docs.front}`}
+                      alt="ID Front"
+                      className="w-full rounded-lg shadow-md bg-white object-contain max-h-[50vh]"
+                    />
+                    <a
+                      href={`${API_BASE_URL}/uploads/${kycViewUser.kyc_docs.front}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-2 text-sm text-gs-teal font-bold hover:underline"
+                    >
+                      <ExternalLink size={14} /> Open in new tab
+                    </a>
+                  </div>
+                )}
+                {kycViewUser.kyc_docs?.back && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">ID Back</p>
+                    <img
+                      src={`${API_BASE_URL}/uploads/${kycViewUser.kyc_docs.back}`}
+                      alt="ID Back"
+                      className="w-full rounded-lg shadow-md bg-white object-contain max-h-[50vh]"
+                    />
+                    <a
+                      href={`${API_BASE_URL}/uploads/${kycViewUser.kyc_docs.back}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-2 text-sm text-gs-teal font-bold hover:underline"
+                    >
+                      <ExternalLink size={14} /> Open in new tab
+                    </a>
+                  </div>
+                )}
+              </div>
+              <div className="p-4 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setKycViewUser(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg font-bold text-gray-700 hover:bg-gray-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => handleKycReview(kycViewUser.id, 'REJECTED')}
+                  className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg font-bold hover:bg-red-100"
+                >
+                  ✗ Reject KYC
+                </button>
+                <button
+                  onClick={() => handleKycReview(kycViewUser.id, 'APPROVED')}
+                  className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg font-bold hover:bg-green-100"
+                >
+                  ✓ Approve KYC
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment proof viewer modal */}
+        {proofViewDonation && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setProofViewDonation(null)}>
+            <div
+              className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h3 className="text-lg font-bold text-gs-navy">Payment proof — {proofViewDonation.full_name}</h3>
+                  <p className="text-sm text-gray-500">
+                    {proofViewDonation.category_name} · ₹{parseFloat(proofViewDonation.amount).toLocaleString('en-IN')} · {new Date(proofViewDonation.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`${API_BASE_URL}/uploads/${proofViewDonation.payment_proof_path}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-2 text-sm font-bold text-gs-teal border border-gs-teal rounded-lg hover:bg-gs-teal/10"
+                  >
+                    <ExternalLink size={16} /> Open in new tab
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setProofViewDonation(null)}
+                    className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                    aria-label="Close"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-auto p-4 bg-gray-100 min-h-[200px] flex items-center justify-center">
+                {proofViewDonation.payment_proof_path && (
+                  (() => {
+                    const ext = (proofViewDonation.payment_proof_path || '').split('.').pop()?.toLowerCase();
+                    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+                    const src = `${API_BASE_URL}/uploads/${proofViewDonation.payment_proof_path}`;
+                    return isImage ? (
+                      <img
+                        src={src}
+                        alt="Payment proof"
+                        className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-md bg-white"
+                      />
+                    ) : (
+                      <div className="text-center">
+                        <p className="text-gray-500 mb-2">Preview not available for this file type.</p>
+                        <a href={src} target="_blank" rel="noopener noreferrer" className="text-gs-teal font-bold hover:underline">
+                          Open in new tab
+                        </a>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+              <div className="p-4 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setProofViewDonation(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg font-bold text-gray-700 hover:bg-gray-50"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => handleDonationReview(proofViewDonation.id, 'REJECTED')}
+                  disabled={donationsLoading}
+                  className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg font-bold hover:bg-red-100"
+                >
+                  ✗ Reject
+                </button>
+                <button
+                  onClick={() => handleDonationReview(proofViewDonation.id, 'CONFIRMED')}
+                  disabled={donationsLoading}
+                  className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg font-bold hover:bg-green-100"
+                >
+                  ✓ Approve
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Table Controls */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -220,6 +493,15 @@ const AdminPage = () => {
                           )}
                           {u.kyc_status === 'SUBMITTED' && (
                             <>
+                              {(u.kyc_docs?.front || u.kyc_docs?.back) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setKycViewUser(u)}
+                                  className="text-[10px] px-2 py-1 bg-gs-teal/10 text-gs-teal border border-gs-teal/20 rounded font-bold hover:bg-gs-teal/20 transition"
+                                >
+                                  <Image size={10} className="inline mr-0.5" /> View docs
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleKycReview(u.id, 'APPROVED')}
                                 className="text-[10px] px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded font-bold hover:bg-green-100 transition"

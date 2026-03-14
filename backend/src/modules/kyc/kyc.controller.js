@@ -28,16 +28,18 @@ export const submitKYC = async (req, res) => {
   }
 };
 
-// --- 2. GET STATUS (NEW!) ---
+// --- 2. GET STATUS ---
 export const getKycStatus = async (req, res) => {
   try {
-    const result = await query('SELECT kyc_status FROM users WHERE id = $1', [req.user.id]);
-    
+    const result = await query(
+      'SELECT kyc_status, kyc_rejection_reason FROM users WHERE id = $1',
+      [req.user.id]
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
 
-    // Return the status directly (or 'PENDING' if null)
     const status = result.rows[0].kyc_status || 'PENDING';
-    res.json({ status });
+    const rejectionReason = result.rows[0].kyc_rejection_reason;
+    res.json({ status, rejectionReason: status === 'REJECTED' ? rejectionReason : null });
 
   } catch (err) {
     console.error(err);
