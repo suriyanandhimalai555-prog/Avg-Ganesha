@@ -8,6 +8,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
+import compression from 'compression';
 import { rateLimitConfig, corsConfig } from './config/index.js';
 
 // Routes
@@ -56,6 +57,7 @@ app.use('/api/', apiLimiter);
 app.use('/api/auth', authLimiter);
 
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(compression());
 app.use(express.json());
 
 // Routes

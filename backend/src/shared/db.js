@@ -18,7 +18,7 @@ const getDbConfig = () => {
         port: params.port,
         database: params.pathname.split('/')[1],
         ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-        max: parseInt(process.env.DB_POOL_MAX) || 10,
+        max: parseInt(process.env.DB_POOL_MAX) || 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
       };
@@ -36,7 +36,7 @@ const getDbConfig = () => {
       port: parseInt(process.env.DB_PORT) || 5432,
       database: process.env.DB_NAME,
       ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-      max: parseInt(process.env.DB_POOL_MAX) || 10,
+      max: parseInt(process.env.DB_POOL_MAX) || 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     };

@@ -53,7 +53,7 @@ const LoginPage = () => {
         <div className={authStyles.topLineDecoration} />
 
         <div className={authStyles.headerWrapper}>
-          <p className={commonStyles.preTitle}>॥ श्री गणेशाय नमः ॥</p>
+          <p className={commonStyles.preTitle}>॥ அகில வெற்றி கணேஷா ॥</p>
           <div className={authStyles.headerEmoji}>🐘</div>
           <h1 className={authStyles.headerTitle}>
             Ganesha <span className="text-gs-teal">Seva</span>

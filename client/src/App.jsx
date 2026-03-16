@@ -13,6 +13,7 @@ import NetworkPage from './pages/NetworkPage';
 import KycPage from './pages/KycPage';
 import NotFoundPage from './pages/NotFoundPage';
 import DonatePage from './pages/DonatePage';
+import HelpPage from './pages/HelpPage';
 
 // Protects routes that require login + optionally a specific role
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -62,6 +63,7 @@ function AppContent() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/donate" element={<DonatePage />} />
+        <Route path="/help" element={<HelpPage />} />
 
         {/* ===== USER DASHBOARD ROUTES ===== */}
         <Route

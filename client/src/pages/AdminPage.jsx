@@ -162,9 +162,9 @@ const AdminPage = () => {
                 <Shield size={20} />
               </div>
               <div>
-                <p className={commonStyles.preTitle}>॥ श्री गणेशाय नमः ॥</p>
+                <p className={commonStyles.preTitle}>॥ அகில வெற்றி கணேஷா ॥</p>
                 <h1 className={adminStyles.navbarTitle}>
-                  🐘 GANESHA SEVA <span className="text-gs-teal font-sans font-medium">| ADMIN</span>
+                  🐘 World Of Agilavetri Ganesha  <span className="text-gs-teal font-sans font-medium">| ADMIN</span>
                 </h1>
               </div>
             </div>

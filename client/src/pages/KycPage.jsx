@@ -69,7 +69,7 @@ const KycPage = () => {
   );
 
   if (status === 'LOADING') {
-    return <div className={kycStyles.loadingText}>🐘 ॥ श्री गणेशाय नमः ॥ Checking Status...</div>;
+    return <div className={kycStyles.loadingText}>🐘 ॥ அகில வெற்றி கணேஷா ॥ Checking Status...</div>;
   }
 
   return (

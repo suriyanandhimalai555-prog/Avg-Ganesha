@@ -9,7 +9,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
-  
+
   const { user, token } = useSelector((state) => state.auth);
   const isLoggedIn = !!token && !!user;
   const isAdmin = user?.role === 'ADMIN';
@@ -36,10 +36,9 @@ const Sidebar = ({ isOpen, onClose }) => {
           navigate(path);
           if (window.innerWidth < 768) onClose();
         }}
-        className={`${sidebarStyles.navItemBase} ${
-          isActive ? sidebarStyles.navItemActive : 
-          isSpecial ? sidebarStyles.navItemSpecial : sidebarStyles.navItemInactive
-        }`}
+        className={`${sidebarStyles.navItemBase} ${isActive ? sidebarStyles.navItemActive :
+            isSpecial ? sidebarStyles.navItemSpecial : sidebarStyles.navItemInactive
+          }`}
       >
         <Icon size={20} className={sidebarStyles.navItemIcon} />
         <span className={sidebarStyles.navItemLabel}>{label}</span>
@@ -62,9 +61,9 @@ const Sidebar = ({ isOpen, onClose }) => {
         <div className={sidebarStyles.logoSection}>
           <div>
             <h1 className={sidebarStyles.logoTitle}>
-              🐘 <span className="text-gs-teal">Ganesha</span> Seva
+              🐘 <span className="text-gs-teal">Agilavetri</span> Ganesha
             </h1>
-            <p className={commonStyles.preTitle + " mt-1"}>॥ श्री गणेशाय नमः ॥</p>
+            <p className={commonStyles.preTitle + " mt-1"}>॥ அகில வெற்றி கணேஷா ॥</p>
           </div>
           <button onClick={onClose} className={sidebarStyles.closeBtn}>
             <X size={24} />
@@ -82,11 +81,13 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* Navigation */}
         <nav className={sidebarStyles.navContainer}>
           {isLoggedIn && <NavItem icon={Home} label="Dashboard" path="/dashboard" />}
-          {isLoggedIn && <NavItem icon={Users} label="Your Invite Network" path="/dashboard/network" />}
           <NavItem icon={Heart} label="Donate / Contribute" path="/donate" />
-          <NavItem icon={Layers} label="Seva Plans" path="/plans" />
           {isLoggedIn && <NavItem icon={Shield} label="Verify Identity (KYC)" path="/dashboard/kyc" />}
-          <NavItem icon={HelpCircle} label="Help" path="/dashboard/help" />
+          {isLoggedIn && <NavItem icon={Users} label="Invite" path="/dashboard/network" />}
+          
+          <div className="pt-4 mt-4 border-t border-gray-100">
+            <NavItem icon={HelpCircle} label="Help & Support" path="/help" isSpecial={true} />
+          </div>
         </nav>
 
         {/* Logout */}

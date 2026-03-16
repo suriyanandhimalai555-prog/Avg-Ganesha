@@ -37,7 +37,7 @@ const DashboardLayout = () => {
               <div>
                 <p className="text-gs-teal font-serif font-semibold tracking-widest text-[10px] md:text-xs mb-0.5">அகில வெற்றி கணேஷா</p>
                 <h2 className="text-xl md:text-3xl font-serif font-bold tracking-wide text-gs-navy">
-                  🐘 <span className="text-gs-teal">Ganesha Seva</span>
+                  🐘 <span className="text-gs-teal">World Of Agilavetri Ganesha</span>
                   <span className="hidden md:inline text-gray-500 text-lg font-sans font-normal ml-2"> — Devotee Portal</span>
                 </h2>
               </div>

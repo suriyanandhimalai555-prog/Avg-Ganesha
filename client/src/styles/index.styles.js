@@ -353,3 +353,22 @@ export const plansStyles = {
   // CTA
   ctaButton: "w-full py-3.5 rounded-full text-white font-bold uppercase tracking-widest text-[10px] shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300",
 };
+
+export const helpStyles = {
+  container: "max-w-3xl mx-auto space-y-8 animate-fade-in pb-12",
+  header: "text-center space-y-4 mb-12",
+  headerIcon: "w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto border-4 border-gs-teal/20 shadow-sm text-gs-teal mb-4",
+  headerTitle: "text-3xl font-serif text-gs-navy font-bold tracking-tight",
+  headerSubtitle: "text-gray-500 text-sm max-w-md mx-auto",
+  
+  card: "bg-white border border-gray-100 rounded-3xl p-8 shadow-sm hover:shadow-md transition-all",
+  cardTitle: "text-xl font-serif font-bold text-gs-navy mb-6 flex items-center gap-3",
+  
+  contactBox: "bg-gs-cream/50 border border-gs-teal/10 rounded-2xl p-6 flex flex-col items-center text-center space-y-3",
+  contactEmail: "text-2xl font-bold text-gs-teal hover:underline break-all",
+  contactLabel: "text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]",
+  
+  faqItem: "border-b border-gray-100 py-4 last:border-0",
+  faqQuestion: "text-sm font-bold text-gs-navy mb-2",
+  faqAnswer: "text-xs text-gray-500 leading-relaxed",
+};

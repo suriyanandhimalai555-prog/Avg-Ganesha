@@ -56,7 +56,7 @@ const DashboardPage = () => {
 
   if (loading) return (
     <div className={dashboardStyles.loadingContainer}>
-      🐘 ॥ श्री गणेशाय नमः ॥
+      🐘 ॥ அகில வெற்றி கணேஷா ॥
     </div>
   );
 
@@ -147,7 +147,7 @@ const DashboardPage = () => {
             <p className={dashboardStyles.heroTitle}>Lord Ganesha</p>
             <p className={dashboardStyles.heroSubtitle}>Vighnaharta — Remover of Obstacles</p>
             <div className={dashboardStyles.heroBadge}>
-              <p className={dashboardStyles.heroBadgeText}>॥ श्री गणेशाय नमः ॥</p>
+              <p className={dashboardStyles.heroBadgeText}>॥ அகில வெற்றி கணேஷா ॥</p>
             </div>
           </div>
         </div>

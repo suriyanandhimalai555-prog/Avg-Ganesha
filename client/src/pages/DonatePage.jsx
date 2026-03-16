@@ -107,7 +107,7 @@ const DonatePage = () => {
   if (loading) {
     return (
       <div className={commonStyles.pageContainer + " flex items-center justify-center"}>
-        <p className="text-gs-teal font-serif text-xl">॥ श्री गणेशाय नमः ॥</p>
+        <p className="text-gs-teal font-serif text-xl">॥ அகில வெற்றி கணேஷா ॥</p>
       </div>
     );
   }
@@ -116,7 +116,7 @@ const DonatePage = () => {
     <div className={commonStyles.pageContainer + " pb-20"}>
       <section className={donateStyles.section}>
         <div className={donateStyles.headerWrapper}>
-          <p className={commonStyles.badgeText}>॥ दानविकल्याः ॥</p>
+          <p className={commonStyles.badgeText}>॥ அகில வெற்றி கணேஷா ॥</p>
           <h2 className={commonStyles.pageTitle}>Donation Categories</h2>
           <p className="text-gray-600 text-sm">Choose a cause to support. Anyone can browse; login and KYC required to donate.</p>
         </div>
