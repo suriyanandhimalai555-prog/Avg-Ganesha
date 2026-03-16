@@ -97,8 +97,17 @@ app.get('/health', async (req, res) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
+  // Catch Multer errors specifically
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'File too large. Maximum limit is 5MB.' });
+  }
+  
+  if (err.name === 'MulterError') {
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  }
+
   console.error('Server Error:', err.stack);
-  res.status(500).json({ error: 'Internal Server Error' });
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
 const server = app.listen(PORT, () => {

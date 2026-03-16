@@ -50,7 +50,19 @@ const KycPage = () => {
     <div className={kycStyles.inputGroup}>
       <label className={kycStyles.inputLabel}>{label}</label>
       <div className={`${kycStyles.uploadBoxBase} ${file ? kycStyles.uploadBoxActive : kycStyles.uploadBoxInactive}`}>
-        <input type="file" onChange={(e) => setFile(e.target.files[0])} className={kycStyles.fileInput} />
+        <input 
+          type="file" 
+          onChange={(e) => {
+            const selectedFile = e.target.files[0];
+            if (selectedFile && selectedFile.size > 5 * 1024 * 1024) {
+              alert('File is too large! Maximum limit is 5MB.');
+              e.target.value = ''; // Reset input
+              return;
+            }
+            setFile(selectedFile);
+          }} 
+          className={kycStyles.fileInput} 
+        />
         {file ? (
           <div className="flex flex-col items-center">
             <FileText className={kycStyles.uploadIconActive} size={32} />

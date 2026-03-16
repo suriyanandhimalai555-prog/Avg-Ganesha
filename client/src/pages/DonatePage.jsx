@@ -315,7 +315,15 @@ const DonatePage = () => {
                       type="file"
                       accept="image/*,.pdf"
                       className="hidden"
-                      onChange={(e) => setPaymentProof(e.target.files[0])}
+                      onChange={(e) => {
+                        const selectedFile = e.target.files[0];
+                        if (selectedFile && selectedFile.size > 5 * 1024 * 1024) {
+                          alert('File is too large! Maximum limit is 5MB.');
+                          e.target.value = ''; // Reset input
+                          return;
+                        }
+                        setPaymentProof(selectedFile);
+                      }}
                     />
                     {paymentProof ? (
                       <div className="flex flex-col items-center gap-2">

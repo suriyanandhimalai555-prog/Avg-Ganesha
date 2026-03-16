@@ -317,7 +317,7 @@ export const kycStyles = {
   rejectionReason: "italic text-red-300/80",
 
   // Button
-  submitBtnBase: "w-full py-4.5 rounded-full font-black text-xs tracking-[0.3em] uppercase transition-all duration-500 shadow-xl",
+  submitBtnBase: "w-full py-6 rounded-full font-black text-sm tracking-[0.3em] uppercase transition-all duration-500 shadow-xl",
   submitBtnDisabled: "bg-white/5 text-white/20 cursor-not-allowed shadow-none border border-white/5",
   submitBtnEnabled: "bg-gradient-to-r from-[#FCD34D] via-[#B45309] to-[#F59E0B] text-white hover:shadow-[0_0_30px_rgba(251,191,36,0.5)] hover:-translate-y-1 scale-100 active:scale-95",
 
