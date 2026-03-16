@@ -84,9 +84,7 @@ export const submitDonation = async (req, res) => {
         `INSERT INTO donations (
           user_id, category_id, amount, payment_proof_path, statue_number, status
         ) VALUES (
-          $1, $2, $3, $4,
-          COALESCE((SELECT MAX(statue_number) FROM donations WHERE statue_number IS NOT NULL), 54) + 1,
-          'PENDING'
+          $1, $2, $3, $4, nextval('statue_number_seq'), 'PENDING'
         ) RETURNING *`,
         [user_id, categoryId, amount, paymentProofPath]
       );
@@ -161,6 +159,13 @@ export const getMyDonationStats = async (req, res) => {
        AND category_id = (SELECT id FROM donation_categories WHERE slug = 'statue_1_5_ft' LIMIT 1)`
     );
 
+    const myStatueNumbers = await query(
+      `SELECT statue_number FROM donations
+       WHERE user_id = $1 AND status = 'CONFIRMED' AND statue_number IS NOT NULL
+       ORDER BY statue_number ASC`,
+      [userId]
+    );
+
     res.json({
       totalDonated: parseFloat(totalResult.rows[0]?.total || 0),
       breakdown: breakdownResult.rows.map((r) => ({
@@ -170,6 +175,7 @@ export const getMyDonationStats = async (req, res) => {
       })),
       statue15FtCount: parseInt(statue15Count.rows[0]?.count || 0),
       globalStatue15FtFunded: parseInt(globalStatue15Count.rows[0]?.count || 0),
+      myStatueNumbers: myStatueNumbers.rows.map(r => r.statue_number),
     });
   } catch (err) {
     console.error('Donation stats error:', err);

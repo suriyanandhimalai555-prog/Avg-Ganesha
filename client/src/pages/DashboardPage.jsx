@@ -109,14 +109,28 @@ const DashboardPage = () => {
               <p className={dashboardStyles.donationValue}>₹{(donationStats.totalDonated ?? 0).toLocaleString('en-IN')}</p>
             </div>
           </div>
-          <div className={dashboardStyles.donationCard}>
-            <div className={`${dashboardStyles.donationIconWrapper} bg-gs-gold/10`}>
-              <Award className="text-gs-gold" size={24} />
+          <div className={`${dashboardStyles.donationCard} flex-col !items-start`}>
+            <div className="flex items-center gap-5 w-full">
+              <div className={`${dashboardStyles.donationIconWrapper} bg-gs-gold/10`}>
+                <Award className="text-gs-gold" size={24} />
+              </div>
+              <div>
+                <p className={dashboardStyles.donationLabel}>Your 1.5 Ft Statues</p>
+                <p className={dashboardStyles.donationValue}>{donationStats.statue15FtCount ?? 0}</p>
+              </div>
             </div>
-            <div>
-              <p className={dashboardStyles.donationLabel}>Your 1.5 Ft Statues</p>
-              <p className={dashboardStyles.donationValue}>{donationStats.statue15FtCount ?? 0}</p>
-            </div>
+            {donationStats.myStatueNumbers?.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-gray-100 w-full">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">Assigned Numbers</p>
+                <div className="flex flex-wrap gap-2">
+                  {donationStats.myStatueNumbers.map((num) => (
+                    <span key={num} className="bg-gs-gold/10 text-gs-gold text-[10px] font-bold px-2 py-1 rounded-md border border-gs-gold/20 shadow-sm">
+                      #{num}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           {donationStats.breakdown?.length > 0 ? (
             <div className={dashboardStyles.breakdownCard}>
