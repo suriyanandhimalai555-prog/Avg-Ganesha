@@ -18,7 +18,9 @@ const ProfilePage = () => {
             </div>
             <div>
                 <h2 className="text-2xl font-serif font-bold text-white mb-1 uppercase tracking-widest">{user?.fullName || 'PRABU'}</h2>
-                <p className="text-[#FBDB8C] text-xs font-bold tracking-[0.2em] uppercase">MEMBER SINCE 2024</p>
+                <p className="text-[#FBDB8C] text-xs font-bold tracking-[0.2em] uppercase">
+                    MEMBER SINCE {user?.createdAt ? new Date(user.createdAt).getFullYear() : '2026'}
+                </p>
             </div>
             <div className={royalDashboardStyles.cardGlowBottom} />
         </div>
@@ -40,7 +42,7 @@ const ProfilePage = () => {
                 </div>
                 <div>
                     <p className="text-[10px] font-bold text-[#FBDB8C]/40 uppercase tracking-widest">Phone Number</p>
-                    <p className="text-white font-medium">{user?.phone || '+91 73382 86331'}</p>
+                    <p className="text-white font-medium">{user?.phone || 'Not provided'}</p>
                 </div>
             </div>
 

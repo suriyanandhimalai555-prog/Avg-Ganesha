@@ -294,24 +294,21 @@ const AdminPage = () => {
                         {u.invited_by_name || <span className="opacity-20">—</span>}
                       </td>
                       <td className="px-8 py-6 whitespace-nowrap">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          {/* u.role !== 'ADMIN' && (
-                            <button type="button" onClick={() => openActionModal('ROLE', u.id, 'ADMIN')}
-                              className="text-[9px] px-3 py-1.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-lg font-black uppercase tracking-widest hover:bg-purple-500/20 transition-all">
-                              Make Admin
-                            </button>
-                          ) */}
+                        <div className="flex flex-col gap-2">
                           {(u.kyc_docs?.front || u.kyc_docs?.back) && (
                             <button type="button" onClick={() => setKycViewUser(u)}
-                              className="text-[9px] px-3 py-1.5 bg-[#FBDB8C]/5 text-[#FBDB8C] border border-[#FBDB8C]/20 rounded-lg font-black uppercase tracking-widest hover:bg-[#FBDB8C]/10 transition-all flex items-center gap-1.5">
+                              className="text-[9px] w-fit px-3 py-1.5 bg-[#FBDB8C]/5 text-[#FBDB8C] border border-[#FBDB8C]/20 rounded-lg font-black uppercase tracking-widest hover:bg-[#FBDB8C]/10 transition-all flex items-center gap-1.5 align-middle">
                               <Image size={10} /> Docs
                             </button>
                           )}
-                          {u.kyc_status === 'SUBMITTED' && (
+                          {u.kyc_status !== 'APPROVED' && (
                             <div className="flex gap-2">
                               <button type="button" onClick={() => openActionModal('KYC', u.id, 'APPROVED')} className={adminStyles.actionBtnApprove}>✓ Approve</button>
                               <button type="button" onClick={() => openActionModal('KYC', u.id, 'REJECTED')} className={adminStyles.actionBtnReject}>✗ Reject</button>
                             </div>
+                          )}
+                          {u.kyc_status === 'APPROVED' && !(u.kyc_docs?.front || u.kyc_docs?.back) && (
+                            <span className="text-white/20 text-[10px] font-bold">—</span>
                           )}
                         </div>
                       </td>
@@ -524,8 +521,12 @@ const AdminPage = () => {
               </div>
               <div className={commonStyles.modalFooter}>
                 <button type="button" onClick={() => setKycViewUser(null)} className={commonStyles.buttonSecondary}>Return</button>
-                <button type="button" onClick={() => openActionModal('KYC', kycViewUser.id, 'REJECTED')} className={adminStyles.actionBtnReject + " px-8 py-3.5"}>✗ Reject Seva</button>
-                <button type="button" onClick={() => openActionModal('KYC', kycViewUser.id, 'APPROVED')} className={adminStyles.actionBtnApprove + " px-8 py-3.5"}>✓ Confirm Devotee</button>
+                {kycViewUser.kyc_status !== 'APPROVED' && (
+                  <>
+                    <button type="button" onClick={() => { openActionModal('KYC', kycViewUser.id, 'REJECTED'); }} className={adminStyles.actionBtnReject + " px-8 py-3.5"}>✗ Reject</button>
+                    <button type="button" onClick={() => { openActionModal('KYC', kycViewUser.id, 'APPROVED'); }} className={adminStyles.actionBtnApprove + " px-8 py-3.5"}>✓ Approve</button>
+                  </>
+                )}
               </div>
             </div>
           </div>
