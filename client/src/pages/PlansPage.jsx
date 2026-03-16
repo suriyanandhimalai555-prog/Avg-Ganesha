@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios';
+import { commonStyles, plansStyles } from '../styles/index.styles';
 
 const PlansPage = () => {
   const [plans, setPlans] = useState([]);
@@ -82,63 +83,63 @@ const PlansPage = () => {
   }, []);
 
   if (loading) return (
-    <div className="min-h-screen bg-floral-confetti bg-gs-cream flex items-center justify-center text-gs-teal font-serif text-xl tracking-widest animate-pulse">
-      🐘 ॥ श्री गणेशाय नमः ॥ Loading Seva Plans...
+    <div className={commonStyles.pageContainer + " flex items-center justify-center text-gs-teal font-serif text-xl tracking-widest animate-pulse"}>
+      🐘 அகில வெற்றி கணேஷா Loading Seva Plans...
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-floral-confetti bg-gs-cream pt-4 pb-12 px-4">
+    <div className={commonStyles.pageContainer + " pt-4 pb-12 px-4"}>
 
       {/* Header */}
-      <div className="max-w-4xl mx-auto text-center mb-10 space-y-2">
-        <p className="text-gs-teal font-serif font-bold tracking-widest text-xs mb-3">॥ सेवा प्रदाता ॥</p>
-        <div className="text-5xl mb-3">🐘</div>
-        <h1 className="text-4xl md:text-5xl font-serif text-gs-navy font-bold tracking-wide mb-2">
+      <div className={plansStyles.headerWrapper}>
+        <p className={commonStyles.badgeText}>॥ सेवा प्रदाता ॥</p>
+        <div className={plansStyles.headerEmoji}>🐘</div>
+        <h1 className={commonStyles.pageTitle}>
           Seva <span className="text-gs-teal">Plans</span>
         </h1>
-        <p className="text-gray-500 font-medium text-sm">Your devotion. Your offering. Your blessing.</p>
-        <p className="text-gray-500 text-xs max-w-2xl mx-auto leading-relaxed mt-2">
+        <p className={plansStyles.headerTagline}>Your devotion. Your offering. Your blessing.</p>
+        <p className={plansStyles.headerDescription}>
           Every devotee of Ganesha Seva connects through sacred offering — choose the seva that resonates with your heart.
         </p>
       </div>
 
       {/* Plans Grid */}
       {plans.length === 0 ? (
-        <div className="max-w-xl mx-auto text-center py-20 bg-white border border-gray-100 rounded-3xl shadow-sm">
-          <div className="text-6xl mb-4">🪷</div>
+        <div className={plansStyles.emptyCard}>
+          <div className={plansStyles.emptyEmoji}>🪷</div>
           <p className="text-gs-navy font-serif font-bold text-lg">No seva plans available yet.</p>
           <p className="text-gray-500 text-sm mt-2">Please check back soon, devotee.</p>
         </div>
       ) : (
-        <div className="max-w-[90rem] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+        <div className={plansStyles.grid}>
           {plans.map((plan) => {
             const style = getStyle(plan.element);
             return (
               <div
                 key={plan.id}
-                className={`rounded-3xl overflow-hidden border ${style.borderColor} ${style.hoverBorder} ${style.cardBg} transition-all duration-300 flex flex-col hover:-translate-y-1 shadow-[0_10px_30px_rgba(45,156,138,0.08)]`}
+                className={`${plansStyles.planCardBase} ${style.borderColor} ${style.hoverBorder} ${style.cardBg}`}
               >
                 {/* Card Header */}
-                <div className={`bg-gradient-to-br ${style.gradient} p-8 text-center relative overflow-hidden border-b ${style.borderColor}`}>
+                <div className={`${plansStyles.planCardHeader} bg-gradient-to-br ${style.gradient} border-b ${style.borderColor}`}>
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px]" />
                   <div className="relative z-10">
                     <div className="flex justify-center mb-4">{style.icon}</div>
-                    <h2 className="text-2xl font-bold font-serif text-gs-navy tracking-wide mb-1">{plan.name}</h2>
-                    <p className={`text-xs uppercase font-bold tracking-widest ${style.textColor} mb-1`}>{plan.element} Seva</p>
-                    <p className="text-[10px] uppercase font-bold tracking-widest text-gray-500 opacity-80">{plan.tagline}</p>
+                    <h2 className={plansStyles.planName}>{plan.name}</h2>
+                    <p className={`${plansStyles.planElement} ${style.textColor}`}>{plan.element} Seva</p>
+                    <p className={plansStyles.planTagline}>{plan.tagline}</p>
                   </div>
                 </div>
 
-                {/* Card Body */}
-                <div className="p-8 flex-1 flex flex-col bg-white">
+                 {/* Card Body */}
+                <div className={plansStyles.planCardBody}>
                   <p className="text-gray-500 italic text-xs mb-3 font-medium">{plan.subtitle}</p>
                   <p className="text-gray-500 text-xs mb-8 leading-relaxed">{plan.description}</p>
 
                   {/* Price */}
                   <div className="mb-8 pb-6 border-b border-gray-100 text-center">
-                    <div className={`text-3xl font-serif font-bold ${style.textColor}`}>{plan.price}</div>
-                    <div className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-2">One-time seva contribution</div>
+                    <div className={`${plansStyles.planPrice} ${style.textColor}`}>{plan.price}</div>
+                    <div className={plansStyles.planPriceSub}>One-time seva contribution</div>
                   </div>
 
                   {/* Benefits */}
@@ -146,8 +147,8 @@ const PlansPage = () => {
                     <h3 className="text-xs uppercase font-bold tracking-widest text-gs-navy mb-4 text-center">Seva Benefits</h3>
                     <ul className="space-y-3">
                       {plan.benefits && plan.benefits.map((benefit, idx) => (
-                        <li key={idx} className="flex items-start gap-3 text-gray-600 text-xs font-medium leading-relaxed">
-                          <span className={`${style.bulletBg} ${style.bulletColor} rounded-full p-1 mt-0.5 flex-shrink-0 text-[10px]`}>🙏</span>
+                        <li key={idx} className={plansStyles.benefitItem}>
+                          <span className={`${plansStyles.benefitBullet} ${style.bulletBg} ${style.bulletColor}`}>🙏</span>
                           <span>{benefit}</span>
                         </li>
                       ))}
@@ -155,13 +156,13 @@ const PlansPage = () => {
                   </div>
 
                   {/* CTA */}
-                  <button className={`w-full py-3.5 rounded-full bg-gradient-to-r ${style.btnGradient} text-white font-bold uppercase tracking-widest text-[10px] shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300`}>
+                  <button className={`${plansStyles.ctaButton} bg-gradient-to-r ${style.btnGradient}`}>
                     Choose This Seva
                   </button>
                 </div>
 
                 {/* Footer */}
-                <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
+                <div className={plansStyles.planCardFooter}>
                   <p className="text-center text-gs-teal font-medium text-[10px] tracking-widest uppercase">
                     🕉️ Blessings of Lord Ganesha upon you
                   </p>

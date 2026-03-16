@@ -36,44 +36,78 @@ export const getCategories = async (req, res) => {
 
 // --- Submit donation (requires auth + KYC approved) ---
 export const submitDonation = async (req, res) => {
-  const userId = req.user.id;
-  const { categoryId, amount } = req.body;
-
-  if (!categoryId || !amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-    return res.status(400).json({ error: 'Category and valid amount are required' });
-  }
-
-  if (!req.file || !req.file.path) {
-    return res.status(400).json({ error: 'Payment proof screenshot is required' });
-  }
+  const categoryId = req.body.categoryId ?? req.body.category_id;
+  const amount = req.body.amount;
+  const user_id = req.user.id;
+  const paymentProofPath = req.file ? `donations/${req.file.filename}` : null;
 
   try {
-    const userRow = await query(
-      'SELECT kyc_status FROM users WHERE id = $1',
-      [userId]
-    );
-    if (userRow.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    if (userRow.rows[0].kyc_status !== 'APPROVED') {
-      return res.status(403).json({
-        error: 'KYC must be approved before donating',
-        kycStatus: userRow.rows[0].kyc_status,
-      });
+    console.log('--- Donation Submission Debug ---');
+    console.log('Full body:', req.body);
+    console.log('categoryId:', categoryId, '| type:', typeof categoryId);
+    console.log('amount:', amount);
+    console.log('paymentProofPath:', paymentProofPath);
+    console.log('user_id:', user_id);
+
+    if (!categoryId) {
+      return res.status(400).json({ error: 'Category ID is required' });
     }
 
-    const amountNum = parseFloat(amount);
-    const proofPath = `donations/${req.file.filename}`;
-    await query(
-      `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, status)
-       VALUES ($1, $2, $3, $4, 'PENDING')`,
-      [userId, categoryId, amountNum, proofPath]
+    if (!paymentProofPath) {
+      return res.status(400).json({ error: 'Payment proof is required' });
+    }
+
+    // Force cast to integer to be safe
+    const categoryCheck = await query(
+      'SELECT name, slug FROM donation_categories WHERE id = $1::int',
+      [categoryId]
     );
 
-    res.status(201).json({ message: 'Donation submitted. Pending admin approval.' });
+    console.log('categoryCheck rows:', categoryCheck.rows);
+
+    const category = categoryCheck.rows[0];
+
+    if (!category) {
+      return res.status(400).json({ error: `No category found for id: ${categoryId}` });
+    }
+
+    console.log('slug from DB:', JSON.stringify(category.slug));
+    console.log('slug char codes:', [...category.slug].map(c => c.charCodeAt(0)));
+
+    const isStatue = category.slug === 'statue_1_5_ft';
+    console.log('isStatue:', isStatue);
+
+    let result;
+    if (isStatue) {
+      console.log('>>> Inserting with statue_number...');
+      result = await query(
+        `INSERT INTO donations (
+          user_id, category_id, amount, payment_proof_path, statue_number, status
+        ) VALUES (
+          $1, $2, $3, $4,
+          COALESCE((SELECT MAX(statue_number) FROM donations WHERE statue_number IS NOT NULL), 54) + 1,
+          'PENDING'
+        ) RETURNING *`,
+        [user_id, categoryId, amount, paymentProofPath]
+      );
+      console.log('>>> statue_number assigned:', result.rows[0].statue_number);
+    } else {
+      console.log('>>> Standard insert (no statue_number)...');
+      result = await query(
+        `INSERT INTO donations (
+          user_id, category_id, amount, payment_proof_path, status
+        ) VALUES ($1, $2, $3, $4, 'PENDING') RETURNING *`,
+        [user_id, categoryId, amount, paymentProofPath]
+      );
+    }
+
+    res.status(201).json({
+      message: 'Donation submitted successfully',
+      donation: result.rows[0],
+    });
   } catch (err) {
-    console.error('Submit donation error:', err);
-    res.status(500).json({ error: 'Failed to submit donation' });
+    console.error('Error submitting donation:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 

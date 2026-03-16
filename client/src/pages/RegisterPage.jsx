@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { registerUser } from '../redux/slices/authSlice';
-import { Lock, Mail, User, Gift, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, User, Gift, ArrowRight, ShieldCheck, Phone } from 'lucide-react';
+import { commonStyles, authStyles } from '../styles/index.styles';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -74,59 +75,59 @@ const RegisterPage = () => {
   if (token && user) return null;
 
   return (
-    <div className="min-h-screen bg-floral-confetti bg-gs-cream flex items-center justify-center p-4 relative overflow-hidden py-12">
-      <div className="w-full max-w-md bg-white border border-gray-100 rounded-3xl p-8 shadow-[0_10px_40px_rgba(45,156,138,0.1)] relative z-10">
+    <div className={commonStyles.pageContainer + " flex items-center justify-center p-4 relative overflow-hidden py-12"}>
+      <div className={authStyles.authCard}>
         
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gs-teal to-transparent opacity-60 rounded-t-3xl" />
+        <div className={authStyles.topLineDecoration} />
 
-        <div className="text-center mb-6">
-          <p className="text-gs-teal font-serif font-semibold tracking-widest text-xs mb-3">॥ श्री गणेशाय नमः ॥</p>
-          <div className="text-4xl mb-2">🐘</div>
-          <h1 className="text-3xl font-serif text-gs-navy font-bold tracking-tight mb-1">
+        <div className={authStyles.headerWrapper}>
+          <p className={commonStyles.preTitle}>॥ श्री गणेशाय नमः ॥</p>
+          <div className={authStyles.headerEmoji}>🐘</div>
+          <h1 className={authStyles.headerTitle}>
             Join <span className="text-gs-teal">Ganesha Seva</span>
           </h1>
-          <p className="text-gray-500 text-xs tracking-[0.2em] font-medium uppercase mt-2">New Devotee Registration</p>
+          <p className={authStyles.headerSubtitle}>New Devotee Registration</p>
         </div>
 
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleRegister} className={authStyles.form}>
 
           {/* Full Name */}
-          <div className="group">
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider group-focus-within:text-gs-teal transition-colors">Full Name</label>
+          <div className={authStyles.inputGroup}>
+            <label className={authStyles.inputLabel}>Full Name</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <div className={authStyles.inputIconWrapper}>
                 <User size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
               </div>
               <input
                 type="text" name="fullName" required
                 value={formData.fullName} onChange={handleChange}
-                className="w-full bg-gray-50 border border-gray-200 text-gs-navy rounded-xl py-3 pl-10 pr-4 focus:border-gs-teal focus:ring-1 focus:ring-gs-teal outline-none transition-all placeholder-gray-400"
+                className={authStyles.inputBase}
                 placeholder="Your Full Name"
               />
             </div>
           </div>
 
           {/* Email */}
-          <div className="group">
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider group-focus-within:text-gs-teal transition-colors">Email Address</label>
+          <div className={authStyles.inputGroup}>
+            <label className={authStyles.inputLabel}>Email Address</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <div className={authStyles.inputIconWrapper}>
                 <Mail size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
               </div>
               <input
                 type="email" name="email" required
                 value={formData.email} onChange={handleChange}
-                className="w-full bg-gray-50 border border-gray-200 text-gs-navy rounded-xl py-3 pl-10 pr-4 focus:border-gs-teal focus:ring-1 focus:ring-gs-teal outline-none transition-all placeholder-gray-400"
+                className={authStyles.inputBase}
                 placeholder="enter@email.com"
               />
             </div>
           </div>
 
           {/* Phone */}
-          <div className="group">
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider group-focus-within:text-gs-teal transition-colors">Phone Number</label>
+          <div className={authStyles.inputGroup}>
+            <label className={authStyles.inputLabel}>Phone Number</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <div className={authStyles.inputIconWrapper}>
                 <Mail size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
               </div>
               <input
@@ -135,55 +136,55 @@ const RegisterPage = () => {
                 required
                 value={formData.phone}
                 onChange={handleChange}
-                className="w-full bg-gray-50 border border-gray-200 text-gs-navy rounded-xl py-3 pl-10 pr-4 focus:border-gs-teal focus:ring-1 focus:ring-gs-teal outline-none transition-all placeholder-gray-400"
+                className={authStyles.inputBase}
                 placeholder="Your phone number"
               />
             </div>
           </div>
 
           {/* Password */}
-          <div className="group">
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider group-focus-within:text-gs-teal transition-colors">Password</label>
+          <div className={authStyles.inputGroup}>
+            <label className={authStyles.inputLabel}>Password</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <div className={authStyles.inputIconWrapper}>
                 <Lock size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
               </div>
               <input
                 type="password" name="password" required minLength={6}
                 value={formData.password} onChange={handleChange}
-                className="w-full bg-gray-50 border border-gray-200 text-gs-navy rounded-xl py-3 pl-10 pr-4 focus:border-gs-teal focus:ring-1 focus:ring-gs-teal outline-none transition-all placeholder-gray-400"
+                className={authStyles.inputBase}
                 placeholder="••••••••"
               />
             </div>
           </div>
 
           {/* Confirm Password */}
-          <div className="group">
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider group-focus-within:text-gs-teal transition-colors">Confirm Password</label>
+          <div className={authStyles.inputGroup}>
+            <label className={authStyles.inputLabel}>Confirm Password</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <div className={authStyles.inputIconWrapper}>
                 <ShieldCheck size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
               </div>
               <input
                 type="password" name="confirmPassword" required minLength={6}
                 value={formData.confirmPassword} onChange={handleChange}
-                className="w-full bg-gray-50 border border-gray-200 text-gs-navy rounded-xl py-3 pl-10 pr-4 focus:border-gs-teal focus:ring-1 focus:ring-gs-teal outline-none transition-all placeholder-gray-400"
+                className={authStyles.inputBase}
                 placeholder="••••••••"
               />
             </div>
           </div>
 
           {/* Invite Code */}
-          <div className="group">
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider group-focus-within:text-gs-teal transition-colors">Invite Code (Optional)</label>
+          <div className={authStyles.inputGroup}>
+            <label className={authStyles.inputLabel}>Invite Code (Optional)</label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <div className={authStyles.inputIconWrapper}>
                 <Gift size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
               </div>
               <input
                 type="text" name="inviteCode"
                 value={formData.inviteCode} onChange={handleChange}
-                className="w-full bg-gray-50 border border-gray-200 text-gs-navy rounded-xl py-3 pl-10 pr-4 focus:border-gs-teal focus:ring-1 focus:ring-gs-teal outline-none transition-all placeholder-gray-400"
+                className={authStyles.inputBase}
                 placeholder="GAN-XXXXX"
               />
             </div>
@@ -192,7 +193,7 @@ const RegisterPage = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gs-teal hover:bg-[#238071] text-white font-bold py-3.5 rounded-full shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 mt-6"
+            className={authStyles.submitButton}
           >
             {loading ? 'Joining Seva...' : (
               <>Join Ganesha Seva <ArrowRight size={18} /></>
@@ -200,7 +201,7 @@ const RegisterPage = () => {
           </button>
         </form>
 
-        <div className="mt-8 text-center bg-gray-50 rounded-xl py-4 border border-gray-100">
+        <div className={authStyles.footerBox}>
           <p className="text-gray-500 text-sm font-medium">
             Already a devotee?{' '}
             <Link to="/login" className="text-gs-teal font-bold hover:underline">Login Here</Link>

@@ -5,6 +5,7 @@ import { logout } from '../redux/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL, API_ROUTES } from '../config/api';
 import { Shield, Users, LogOut, Search, Calendar, Mail, CheckCircle, Clock, FileText, Heart, Image, X, ExternalLink } from 'lucide-react';
+import { commonStyles, adminStyles } from '../styles/index.styles';
 
 const AdminPage = () => {
   const [stats, setStats] = useState({ totalUsers: 0, submittedKYC: 0, approvedKYC: 0, totalInvited: 0, pendingDonations: 0 });
@@ -137,38 +138,38 @@ const AdminPage = () => {
   const StatCard = ({ title, value, icon: Icon, colorClass, filterType }) => (
     <div
       onClick={() => { setKycFilter(filterType); setPage(1); }}
-      className={`bg-white border ${kycFilter === filterType ? 'border-gs-teal shadow-md ring-1 ring-gs-teal' : 'border-gray-200 shadow-sm'} p-6 rounded-2xl flex items-center justify-between relative overflow-hidden group cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5`}
+      className={`${adminStyles.statCardBase} ${kycFilter === filterType ? adminStyles.statCardActive : adminStyles.statCardInactive}`}
     >
-      <div className="absolute top-0 right-0 w-24 h-24 bg-gray-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110 pointer-events-none" />
+      <div className={adminStyles.statCardDecoration} />
       <div className="relative z-10">
-        <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">{title}</h3>
-        <p className="text-3xl font-bold font-serif text-gs-navy">{value}</p>
+        <h3 className={adminStyles.statCardLabel}>{title}</h3>
+        <p className={adminStyles.statCardValue}>{value}</p>
       </div>
-      <div className={`p-4 rounded-xl border border-gray-100 bg-white shadow-sm relative z-10 ${colorClass}`}>
+      <div className={`${adminStyles.statCardIconWrapper} ${colorClass}`}>
         <Icon size={24} />
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-floral-confetti bg-gs-cream font-sans text-gs-navy">
+    <div className={commonStyles.pageContainer}>
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-20 items-center">
+      <nav className={adminStyles.navbar}>
+        <div className={adminStyles.navbarInner}>
+          <div className={adminStyles.navbarContent}>
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-gs-teal/10 rounded-xl flex items-center justify-center text-gs-teal font-bold border border-gs-teal/20">
+              <div className={adminStyles.navbarLogoWrapper}>
                 <Shield size={20} />
               </div>
               <div>
-                <p className="text-gs-teal font-serif font-semibold tracking-widest text-[10px] mb-0.5">॥ श्री गणेशाय नमः ॥</p>
-                <h1 className="text-xl font-bold font-serif text-gs-navy tracking-wide">
+                <p className={commonStyles.preTitle}>॥ श्री गणेशाय नमः ॥</p>
+                <h1 className={adminStyles.navbarTitle}>
                   🐘 GANESHA SEVA <span className="text-gs-teal font-sans font-medium">| ADMIN</span>
                 </h1>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <button onClick={handleLogout} className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-4 py-2 rounded-lg text-sm transition-all border border-red-100">
+              <button onClick={handleLogout} className={adminStyles.logoutBtn}>
                 <LogOut size={16} /> Logout
               </button>
             </div>
@@ -176,11 +177,11 @@ const AdminPage = () => {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+      <main className={commonStyles.mainContent}>
 
         {/* Account details editor */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-8">
-          <h2 className="text-lg font-serif font-bold text-gs-navy mb-4">Donation Account Details</h2>
+        <div className={adminStyles.sectionBox}>
+          <h2 className={commonStyles.sectionTitle}>Donation Account Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Name</label>
@@ -227,7 +228,7 @@ const AdminPage = () => {
             type="button"
             onClick={handleSaveBankDetails}
             disabled={savingBank}
-            className="mt-4 px-4 py-2 rounded-lg bg-gs-teal text-white font-bold text-sm hover:bg-[#1A7566] disabled:opacity-60"
+            className={commonStyles.buttonPrimary + " mt-4 px-4 py-2"}
           >
             {savingBank ? 'Saving...' : 'Save Account Details'}
           </button>
@@ -239,59 +240,59 @@ const AdminPage = () => {
           <StatCard title="KYC Needs Review" value={stats.submittedKYC} icon={FileText} colorClass="text-orange-500" filterType="SUBMITTED" />
           <StatCard title="Verified" value={stats.approvedKYC} icon={CheckCircle} colorClass="text-green-500" filterType="APPROVED" />
           <StatCard title="Total Invited" value={stats.totalInvited} icon={Users} colorClass="text-purple-500" filterType="ALL" />
-          <div className="bg-white border border-amber-200 shadow-sm p-6 rounded-2xl flex items-center justify-between relative overflow-hidden group cursor-default">
+          <div className={adminStyles.donationStatBox}>
             <div>
-              <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Pending Donations</h3>
-              <p className="text-3xl font-bold font-serif text-amber-600">{stats.pendingDonations ?? 0}</p>
+              <h3 className={adminStyles.statCardLabel}>Pending Donations</h3>
+              <p className={adminStyles.statCardValueAmber}>{stats.pendingDonations ?? 0}</p>
             </div>
-            <div className="p-4 rounded-xl bg-amber-50 text-amber-600"><Heart size={24} /></div>
+            <div className={adminStyles.donationStatIcon}><Heart size={24} /></div>
           </div>
         </div>
 
         {/* Donations (pending + history) */}
         {pendingDonations?.length > 0 && (
           <div className="mb-10">
-            <h2 className="text-2xl font-bold font-serif text-gs-navy mb-4">Donations</h2>
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+            <h2 className={commonStyles.sectionTitle}>Donations</h2>
+            <div className={commonStyles.tableContainer}>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50">
+                  <thead className={commonStyles.tableHead}>
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Donor</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Category</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Amount</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Payment Proof</th>
-                      <th className="px-6 py-3 text-left text-xs font-bold text-gs-teal uppercase">Actions</th>
+                      <th className={commonStyles.tableHeaderCell}>Donor</th>
+                      <th className={commonStyles.tableHeaderCell}>Category</th>
+                      <th className={commonStyles.tableHeaderCell}>Amount</th>
+                      <th className={commonStyles.tableHeaderCell}>Date</th>
+                      <th className={commonStyles.tableHeaderCell}>Status</th>
+                      <th className={commonStyles.tableHeaderCell}>Payment Proof</th>
+                      <th className={commonStyles.tableHeaderCell}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pendingDonations.map((d) => (
                       <tr key={d.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm">
+                        <td className={commonStyles.tableCell}>
                           <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                            className={`${adminStyles.statusBadgeBase} ${
                               d.status === 'CONFIRMED'
-                                ? 'bg-green-50 text-green-700 border border-green-200'
+                                ? adminStyles.statusConfirmed
                                 : d.status === 'REJECTED'
-                                ? 'bg-red-50 text-red-700 border border-red-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                ? adminStyles.statusRejected
+                                : adminStyles.statusPending
                             }`}
                           >
                             {d.status || 'PENDING'}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={commonStyles.tableCell}>
                           <div>
                             <p className="font-bold text-gs-navy">{d.full_name}</p>
                             <p className="text-xs text-gray-500">{d.email}</p>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm">{d.category_name}</td>
-                        <td className="px-6 py-4 font-bold text-gs-teal">₹{parseFloat(d.amount).toLocaleString('en-IN')}</td>
-                        <td className="px-6 py-4 text-sm text-gray-500">{new Date(d.created_at).toLocaleDateString()}</td>
-                        <td className="px-6 py-4">
+                        <td className={commonStyles.tableCell}>{d.category_name}</td>
+                        <td className={`${commonStyles.tableCell} font-bold text-gs-teal`}>₹{parseFloat(d.amount).toLocaleString('en-IN')}</td>
+                        <td className={`${commonStyles.tableCell} text-gray-500`}>{new Date(d.created_at).toLocaleDateString()}</td>
+                        <td className={commonStyles.tableCell}>
                           {d.payment_proof_path ? (
                             <button
                               type="button"
@@ -304,20 +305,20 @@ const AdminPage = () => {
                             <span className="text-gray-400 text-sm">—</span>
                           )}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className={commonStyles.tableCell}>
                           {d.status === 'PENDING' ? (
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleDonationReview(d.id, 'CONFIRMED')}
                                 disabled={donationsLoading}
-                                className="text-[10px] px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded font-bold hover:bg-green-100"
+                                className={adminStyles.actionBtnApprove}
                               >
                                 ✓ Approve
                               </button>
                               <button
                                 onClick={() => handleDonationReview(d.id, 'REJECTED')}
                                 disabled={donationsLoading}
-                                className="text-[10px] px-2 py-1 bg-red-50 text-red-700 border border-red-200 rounded font-bold hover:bg-red-100"
+                                className={adminStyles.actionBtnReject}
                               >
                                 ✗ Reject
                               </button>
@@ -337,12 +338,12 @@ const AdminPage = () => {
 
         {/* KYC documents viewer modal */}
         {kycViewUser && (kycViewUser.kyc_docs?.front || kycViewUser.kyc_docs?.back) && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setKycViewUser(null)}>
+          <div className={commonStyles.modalOverlay} onClick={() => setKycViewUser(null)}>
             <div
-              className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+              className={commonStyles.modalContent + " max-w-4xl"}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+              <div className={commonStyles.modalHeader}>
                 <div>
                   <h3 className="text-lg font-bold text-gs-navy">KYC documents — {kycViewUser.full_name}</h3>
                   <p className="text-sm text-gray-500">{kycViewUser.email}</p>
@@ -394,23 +395,23 @@ const AdminPage = () => {
                   </div>
                 )}
               </div>
-              <div className="p-4 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
+              <div className={commonStyles.modalFooter}>
                 <button
                   type="button"
                   onClick={() => setKycViewUser(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg font-bold text-gray-700 hover:bg-gray-50"
+                  className={commonStyles.buttonSecondary + " px-4 py-2"}
                 >
                   Close
                 </button>
                 <button
                   onClick={() => handleKycReview(kycViewUser.id, 'REJECTED')}
-                  className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg font-bold hover:bg-red-100"
+                  className={adminStyles.actionBtnReject + " px-4 py-2 text-sm rounded-lg"}
                 >
                   ✗ Reject KYC
                 </button>
                 <button
                   onClick={() => handleKycReview(kycViewUser.id, 'APPROVED')}
-                  className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg font-bold hover:bg-green-100"
+                  className={adminStyles.actionBtnApprove + " px-4 py-2 text-sm rounded-lg"}
                 >
                   ✓ Approve KYC
                 </button>
@@ -421,12 +422,12 @@ const AdminPage = () => {
 
         {/* Payment proof viewer modal */}
         {proofViewDonation && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setProofViewDonation(null)}>
+          <div className={commonStyles.modalOverlay} onClick={() => setProofViewDonation(null)}>
             <div
-              className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+              className={commonStyles.modalContent + " max-w-4xl"}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+              <div className={commonStyles.modalHeader}>
                 <div>
                   <h3 className="text-lg font-bold text-gs-navy">Payment proof — {proofViewDonation.full_name}</h3>
                   <p className="text-sm text-gray-500">
@@ -475,25 +476,25 @@ const AdminPage = () => {
                   })()
                 )}
               </div>
-              <div className="p-4 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
+              <div className={commonStyles.modalFooter}>
                 <button
                   type="button"
                   onClick={() => setProofViewDonation(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg font-bold text-gray-700 hover:bg-gray-50"
+                  className={commonStyles.buttonSecondary + " px-4 py-2"}
                 >
                   Close
                 </button>
                 <button
                   onClick={() => handleDonationReview(proofViewDonation.id, 'REJECTED')}
                   disabled={donationsLoading}
-                  className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg font-bold hover:bg-red-100"
+                  className={adminStyles.actionBtnReject + " px-4 py-2 text-sm rounded-lg"}
                 >
                   ✗ Reject
                 </button>
                 <button
                   onClick={() => handleDonationReview(proofViewDonation.id, 'CONFIRMED')}
                   disabled={donationsLoading}
-                  className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg font-bold hover:bg-green-100"
+                  className={adminStyles.actionBtnApprove + " px-4 py-2 text-sm rounded-lg"}
                 >
                   ✓ Approve
                 </button>
@@ -505,9 +506,9 @@ const AdminPage = () => {
         {/* Table Controls */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
           <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold font-serif text-gs-navy">Devotee Directory</h2>
+            <h2 className={commonStyles.sectionTitle + " mb-0"}>Devotee Directory</h2>
             {kycFilter !== 'ALL' && (
-              <span className="px-3 py-1 bg-gs-teal/10 text-gs-teal border border-gs-teal/20 text-xs font-bold rounded-full uppercase">
+              <span className={commonStyles.badgeText}>
                 Showing filter: {kycFilter}
               </span>
             )}
@@ -516,7 +517,7 @@ const AdminPage = () => {
             <input
               type="text"
               placeholder="Search name, email, code..."
-              className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gs-navy focus:border-gs-teal focus:ring-1 focus:ring-gs-teal focus:outline-none w-full md:w-80 transition-shadow shadow-sm"
+              className={commonStyles.input + " pl-10 pr-4 py-2.5 rounded-xl w-full md:w-80 shadow-sm"}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
@@ -525,17 +526,17 @@ const AdminPage = () => {
         </div>
 
         {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className={commonStyles.tableContainer}>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-100">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className={commonStyles.tableHead}>
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gs-teal uppercase tracking-widest bg-gray-50/50">Devotee</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gs-teal uppercase tracking-widest bg-gray-50/50">Role</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gs-teal uppercase tracking-widest bg-gray-50/50">Joined</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gs-teal uppercase tracking-widest bg-gray-50/50">KYC</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gs-teal uppercase tracking-widest bg-gray-50/50">Invited By</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gs-teal uppercase tracking-widest bg-gray-50/50">Actions</th>
+                  <th className={commonStyles.tableHeaderCell}>Devotee</th>
+                  <th className={commonStyles.tableHeaderCell}>Role</th>
+                  <th className={commonStyles.tableHeaderCell}>Joined</th>
+                  <th className={commonStyles.tableHeaderCell}>KYC</th>
+                  <th className={commonStyles.tableHeaderCell}>Invited By</th>
+                  <th className={commonStyles.tableHeaderCell}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -546,7 +547,7 @@ const AdminPage = () => {
                 ) : (
                   users.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className={commonStyles.tableCell}>
                         <div className="flex items-center">
                           <div className="h-10 w-10 rounded-full bg-gs-teal/10 border border-gs-teal/20 flex items-center justify-center text-gs-teal font-bold shadow-sm">
                             {u.full_name?.charAt(0).toUpperCase() || 'D'}
@@ -557,33 +558,33 @@ const AdminPage = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide border ${
-                          u.role === 'ADMIN' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+                      <td className={commonStyles.tableCell}>
+                        <span className={`${adminStyles.roleBase} ${
+                          u.role === 'ADMIN' ? adminStyles.roleAdmin : adminStyles.roleUser
                         }`}>{u.role}</span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium">
+                      <td className={`${commonStyles.tableCell} text-gray-500`}>
                         <div className="flex items-center gap-2"><Calendar size={14} />{new Date(u.created_at).toLocaleDateString()}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`flex items-center w-fit gap-1 px-2.5 py-1 text-[10px] uppercase tracking-wide font-bold rounded-full border ${
-                          u.kyc_status === 'APPROVED' ? 'bg-green-50 text-green-700 border-green-200' :
-                          u.kyc_status === 'SUBMITTED' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                          'bg-orange-50 text-orange-700 border-orange-200'
+                      <td className={commonStyles.tableCell}>
+                        <span className={`${adminStyles.statusBadgeBase} ${
+                          u.kyc_status === 'APPROVED' ? adminStyles.statusConfirmed :
+                          u.kyc_status === 'SUBMITTED' ? adminStyles.statusPending :
+                          adminStyles.statusRejected
                         }`}>
                           {u.kyc_status === 'APPROVED' ? <CheckCircle size={10} /> : <Clock size={10} />}
                           {u.kyc_status || 'PENDING'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-medium tracking-wide">
+                      <td className={`${commonStyles.tableCell} text-gray-500`}>
                         {u.invited_by_name || <span className="opacity-40">—</span>}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className={commonStyles.tableCell}>
                         <div className="flex items-center gap-2">
                           {u.role !== 'ADMIN' && (
                             <button
                               onClick={() => handleRoleChange(u.id, 'ADMIN')}
-                              className="text-[10px] px-2 py-1 bg-purple-50 text-purple-600 border border-purple-200 rounded font-bold hover:bg-purple-100 transition"
+                              className={`${adminStyles.roleBase} ${adminStyles.roleAdmin} cursor-pointer hover:opacity-80`}
                             >
                               → Admin
                             </button>
@@ -591,7 +592,7 @@ const AdminPage = () => {
                           {u.role === 'ADMIN' && (
                             <button
                               onClick={() => handleRoleChange(u.id, 'USER')}
-                              className="text-[10px] px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded font-bold hover:bg-gray-200 transition"
+                              className={`${adminStyles.roleBase} ${adminStyles.roleUser} cursor-pointer hover:opacity-80`}
                             >
                               → User
                             </button>
@@ -600,7 +601,7 @@ const AdminPage = () => {
                             <button
                               type="button"
                               onClick={() => setKycViewUser(u)}
-                              className="text-[10px] px-2 py-1 bg-gs-teal/10 text-gs-teal border border-gs-teal/20 rounded font-bold hover:bg-gs-teal/20 transition"
+                              className={commonStyles.buttonSmall}
                             >
                               <Image size={10} className="inline mr-0.5" /> View docs
                             </button>
@@ -609,13 +610,13 @@ const AdminPage = () => {
                             <>
                               <button
                                 onClick={() => handleKycReview(u.id, 'APPROVED')}
-                                className="text-[10px] px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded font-bold hover:bg-green-100 transition"
+                                className={adminStyles.actionBtnApprove}
                               >
                                 ✓ Approve
                               </button>
                               <button
                                 onClick={() => handleKycReview(u.id, 'REJECTED')}
-                                className="text-[10px] px-2 py-1 bg-red-50 text-red-700 border border-red-200 rounded font-bold hover:bg-red-100 transition"
+                                className={adminStyles.actionBtnReject}
                               >
                                 ✗ Reject
                               </button>
@@ -631,10 +632,10 @@ const AdminPage = () => {
           </div>
 
           {/* Pagination */}
-          <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="text-xs font-bold text-gs-teal disabled:opacity-30 hover:underline">← Previous</button>
-            <span className="text-xs font-bold text-gray-500 bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm">Page {page} of {totalPages}</span>
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="text-xs font-bold text-gs-teal disabled:opacity-30 hover:underline">Next →</button>
+          <div className={commonStyles.tableFooter}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className={commonStyles.paginationBtn}>← Previous</button>
+            <span className={commonStyles.paginationText}>Page {page} of {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className={commonStyles.paginationBtn}>Next →</button>
           </div>
         </div>
       </main>

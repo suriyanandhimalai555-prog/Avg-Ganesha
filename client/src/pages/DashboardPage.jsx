@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { API_ROUTES } from '../config/api';
 import { Shield, Heart, Award } from 'lucide-react';
 import { useSelector } from 'react-redux';
+import { commonStyles, dashboardStyles } from '../styles/index.styles';
 
 const DashboardPage = () => {
   const [inviteStats, setInviteStats] = useState(null);
@@ -37,42 +38,42 @@ const DashboardPage = () => {
   }, [token]);
 
   const getDevoteeLevel = (count = 0) => {
-    if (count >= 10) return { label: 'Maha Bhakta', emoji: '🌟', gradient: 'bg-gradient-to-br from-yellow-400 via-gs-gold to-yellow-600', border: 'border-gs-gold', glow: 'shadow-[0_0_30px_rgba(212,175,55,0.4)]', textColor: 'text-yellow-900' };
-    if (count >= 5)  return { label: 'Uttama Seva', emoji: '🪷',  gradient: 'bg-gradient-to-br from-gs-teal via-[#1A7566] to-gs-navy',   border: 'border-gs-teal', glow: 'shadow-[0_0_30px_rgba(45,156,138,0.4)]', textColor: 'text-white' };
-    if (count >= 2)  return { label: 'Seva Ratna',  emoji: '✨',  gradient: 'bg-gradient-to-br from-[#4DB6AC] to-gs-teal', border: 'border-[#4DB6AC]',  glow: 'shadow-[0_0_30px_rgba(77,182,172,0.4)]', textColor: 'text-white' };
-    return             { label: 'Nava Bhakta',  emoji: '🕉️',  gradient: 'bg-gradient-to-br from-gray-100 to-gray-200',                   border: 'border-gray-300',   glow: 'shadow-none',                                textColor: 'text-gray-600' };
+    if (count >= 10) return { label: 'Maha Bhakta', emoji: '🌟', gradient: dashboardStyles.levelGradientGold, border: dashboardStyles.levelBorderGold, glow: dashboardStyles.levelGlowGold, textColor: 'text-yellow-900' };
+    if (count >= 5)  return { label: 'Uttama Seva', emoji: '🪷',  gradient: dashboardStyles.levelGradientTeal, border: dashboardStyles.levelBorderTeal, glow: dashboardStyles.levelGlowTeal, textColor: 'text-white' };
+    if (count >= 2)  return { label: 'Seva Ratna',  emoji: '✨',  gradient: dashboardStyles.levelGradientMint, border: dashboardStyles.levelBorderMint, glow: dashboardStyles.levelGlowMint, textColor: 'text-white' };
+    return             { label: 'Nava Bhakta',  emoji: '🕉️',  gradient: dashboardStyles.levelGradientGray, border: dashboardStyles.levelBorderGray, glow: dashboardStyles.levelGlowNone, textColor: 'text-gray-600' };
   };
 
   const inviteCount = inviteStats?.invite_count || 0;
   const level = getDevoteeLevel(inviteCount);
 
   const InfoCard = ({ title, value, colorClass = 'text-gs-teal' }) => (
-    <div className="bg-white border border-gray-100 rounded-2xl p-6 flex flex-col items-center justify-center shadow-sm hover:shadow-md transition-all duration-300 cursor-default h-32">
-      <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-bold mb-3">{title}</p>
-      <p className={`text-3xl font-bold font-serif ${colorClass}`}>{value}</p>
+    <div className={dashboardStyles.infoCard}>
+      <p className={dashboardStyles.infoCardLabel}>{title}</p>
+      <p className={`${dashboardStyles.infoCardValue} ${colorClass}`}>{value}</p>
     </div>
   );
 
   if (loading) return (
-    <div className="text-gs-teal animate-pulse text-xl font-serif tracking-widest text-center mt-20">
+    <div className={dashboardStyles.loadingContainer}>
       🐘 ॥ श्री गणेशाय नमः ॥
     </div>
   );
 
   return (
-    <div className="animate-fade-in space-y-8">
+    <div className={dashboardStyles.container}>
 
       {/* Stats Row */}
-      <div className="flex flex-col lg:flex-row gap-8">
+      <div className={dashboardStyles.statsRow}>
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
           <InfoCard title="Devotee Name" value={user.fullName || 'Devotee'} colorClass="text-gs-navy" />
-          <div className="bg-white border border-gray-100 rounded-2xl p-6 flex flex-col justify-center shadow-sm hover:shadow-md h-32">
-            <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-bold mb-3">KYC Status</p>
+          <div className={dashboardStyles.infoCard}>
+            <p className={dashboardStyles.infoCardLabel}>KYC Status</p>
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                kycStatus === 'APPROVED' ? 'bg-green-100 text-green-700' :
-                kycStatus === 'SUBMITTED' ? 'bg-blue-100 text-blue-700' :
-                kycStatus === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+              <span className={`${dashboardStyles.statusBadgeBase} ${
+                kycStatus === 'APPROVED' ? dashboardStyles.statusBadgeApproved :
+                kycStatus === 'SUBMITTED' ? dashboardStyles.statusBadgeSubmitted :
+                kycStatus === 'REJECTED' ? dashboardStyles.statusBadgeRejected : dashboardStyles.statusBadgePending
               }`}>
                 {kycStatus || 'PENDING'}
               </span>
@@ -84,13 +85,13 @@ const DashboardPage = () => {
         </div>
 
         {/* Level Badge */}
-        <div className="w-full lg:w-auto flex justify-center items-center">
-          <div className={`relative w-36 h-36 rounded-full p-1 flex items-center justify-center border-4 bg-white ${level.border} ${level.glow} shadow-sm transition-all duration-700`}>
-            <div className={`absolute inset-2 rounded-full ${level.gradient} opacity-20 pointer-events-none`} />
-            <div className="text-center z-10 relative">
+        <div className={dashboardStyles.badgeWrapper}>
+          <div className={`${dashboardStyles.badgeBase} ${level.border} ${level.glow}`}>
+            <div className={`${dashboardStyles.badgeOverlay} ${level.gradient}`} />
+            <div className={dashboardStyles.badgeContent}>
               <div className="text-3xl mb-1">{level.emoji}</div>
-              <p className={`text-[9px] font-extrabold uppercase tracking-widest ${level.textColor} opacity-70`}>STATUS</p>
-              <p className={`text-[11px] font-black ${level.textColor} leading-tight`}>{level.label}</p>
+              <p className={`${dashboardStyles.badgeStatusLabel} ${level.textColor}`}>STATUS</p>
+              <p className={`${dashboardStyles.badgeStatusValue} ${level.textColor}`}>{level.label}</p>
             </div>
           </div>
         </div>
@@ -98,33 +99,33 @@ const DashboardPage = () => {
 
       {/* Donation Stats */}
       {donationStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
-            <div className="w-14 h-14 rounded-full bg-gs-teal/10 flex items-center justify-center">
+        <div className={dashboardStyles.donationStatsGrid}>
+          <div className={dashboardStyles.donationCard}>
+            <div className={`${dashboardStyles.donationIconWrapper} bg-gs-teal/10`}>
               <Heart className="text-gs-teal" size={24} />
             </div>
             <div>
-              <p className="text-gray-400 text-xs uppercase tracking-wider font-bold mb-1">Total Donated</p>
-              <p className="text-2xl font-bold font-serif text-gs-navy">₹{(donationStats.totalDonated ?? 0).toLocaleString('en-IN')}</p>
+              <p className={dashboardStyles.donationLabel}>Total Donated</p>
+              <p className={dashboardStyles.donationValue}>₹{(donationStats.totalDonated ?? 0).toLocaleString('en-IN')}</p>
             </div>
           </div>
-          <div className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
-            <div className="w-14 h-14 rounded-full bg-gs-gold/10 flex items-center justify-center">
+          <div className={dashboardStyles.donationCard}>
+            <div className={`${dashboardStyles.donationIconWrapper} bg-gs-gold/10`}>
               <Award className="text-gs-gold" size={24} />
             </div>
             <div>
-              <p className="text-gray-400 text-xs uppercase tracking-wider font-bold mb-1">Your 1.5 Ft Statues</p>
-              <p className="text-2xl font-bold font-serif text-gs-navy">{donationStats.statue15FtCount ?? 0}</p>
+              <p className={dashboardStyles.donationLabel}>Your 1.5 Ft Statues</p>
+              <p className={dashboardStyles.donationValue}>{donationStats.statue15FtCount ?? 0}</p>
             </div>
           </div>
           {donationStats.breakdown?.length > 0 ? (
-            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-              <p className="text-gray-400 text-xs uppercase tracking-wider font-bold mb-3">Donation Breakdown</p>
+            <div className={dashboardStyles.breakdownCard}>
+              <p className={dashboardStyles.breakdownTitle}>Donation Breakdown</p>
               <ul className="space-y-2 text-sm">
                 {donationStats.breakdown.slice(0, 5).map((b, i) => (
-                  <li key={i} className="flex justify-between">
+                  <li key={i} className={dashboardStyles.breakdownItem}>
                     <span className="text-gs-navy truncate mr-2">{b.categoryName}</span>
-                    <span className="font-bold text-gs-teal">₹{(b.total ?? 0).toLocaleString('en-IN')}</span>
+                    <span className={dashboardStyles.breakdownValue}>₹{(b.total ?? 0).toLocaleString('en-IN')}</span>
                   </li>
                 ))}
               </ul>
@@ -138,15 +139,15 @@ const DashboardPage = () => {
       )}
 
       {/* Ganesha Hero Image */}
-      <div className="flex justify-center mt-8">
-        <div className="relative w-full max-w-3xl rounded-3xl border border-gs-teal/20 bg-white shadow-[0_10px_40px_rgba(45,156,138,0.08)] overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-gs-teal/5 to-transparent pointer-events-none" />
-          <div className="w-full h-72 flex flex-col items-center justify-center relative z-10">
-            <div className="text-8xl animate-float">🐘</div>
-            <p className="text-gs-navy font-serif font-bold text-2xl mt-4">Lord Ganesha</p>
-            <p className="text-gray-500 text-sm mt-1 mb-3">Vighnaharta — Remover of Obstacles</p>
-            <div className="px-6 py-2 bg-gs-teal/10 rounded-full">
-              <p className="text-gs-teal text-xs font-serif font-bold tracking-widest">॥ श्री गणेशाय नमः ॥</p>
+      <div className={dashboardStyles.heroWrapper}>
+        <div className={dashboardStyles.heroCard}>
+          <div className={dashboardStyles.heroOverlay} />
+          <div className={dashboardStyles.heroContent}>
+            <div className={dashboardStyles.heroEmoji}>🐘</div>
+            <p className={dashboardStyles.heroTitle}>Lord Ganesha</p>
+            <p className={dashboardStyles.heroSubtitle}>Vighnaharta — Remover of Obstacles</p>
+            <div className={dashboardStyles.heroBadge}>
+              <p className={dashboardStyles.heroBadgeText}>॥ श्री गणेशाय नमः ॥</p>
             </div>
           </div>
         </div>
