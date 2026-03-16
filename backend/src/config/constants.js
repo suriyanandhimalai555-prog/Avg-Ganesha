@@ -10,5 +10,5 @@ export const AUTH_ERRORS = Object.freeze({
   LOGIN_FAILED: 'Login failed due to server error',
 });
 
-export const INVITE_PREFIX = 'GAN-';
+export const INVITE_PREFIX = 'AVG-';
 export const INVITE_CODE_LENGTH = 5;

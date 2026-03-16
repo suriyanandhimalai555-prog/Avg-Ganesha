@@ -55,6 +55,7 @@ if (!dbConfig) {
   pool = {
     query: () => Promise.reject(new Error('Database not configured. Check your .env file.')),
     connect: () => Promise.reject(new Error('Database not configured. Check your .env file.')),
+    end: () => Promise.resolve(),
     on: () => {},
   };
 } else {

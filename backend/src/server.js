@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import compression from 'compression';
 import { rateLimitConfig, corsConfig } from './config/index.js';
+import { pool } from './shared/db.js';
 
 // Routes
 import authRoutes from './modules/auth/auth.routes.js';
@@ -21,6 +22,7 @@ import settingsRoutes from './modules/settings/settings.routes.js';
 import donationsRoutes from './modules/donations/donations.routes.js';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5001;
 
 const allowedOrigins = corsConfig.allowedOrigins;
@@ -58,7 +60,7 @@ app.use('/api/auth', authLimiter);
 
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(compression());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -84,8 +86,13 @@ app.use('/uploads', (req, res, next) => {
 }, express.static(path.join(__dirname, '..', 'uploads')));
 
 // Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', app: 'Ganesha Seva Platform' });
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', app: 'Ganesha Seva Platform', db: 'connected' });
+  } catch (err) {
+    res.status(503).json({ status: 'error', app: 'Ganesha Seva Platform', db: 'disconnected' });
+  }
 });
 
 // Global Error Handler
@@ -94,7 +101,31 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🐘 Ganesha Seva Platform running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
   console.log(`Allowed Origins:`, allowedOrigins);
 });
+
+// Graceful Shutdown Handler
+const gracefulShutdown = () => {
+  console.log('\nClosing server and database pool...');
+  server.close(() => {
+    console.log('HTTP server closed.');
+    pool.end().then(() => {
+      console.log('Database pool closed.');
+      process.exit(0);
+    }).catch((err) => {
+      console.error('Error closing pool:', err);
+      process.exit(1);
+    });
+  });
+
+  // Force close after 10s
+  setTimeout(() => {
+    console.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);

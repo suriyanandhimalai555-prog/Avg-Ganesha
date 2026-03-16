@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { submitKYC, reviewKYC, getKycStatus } from './kyc.controller.js';
-import { authenticateToken } from '../../middleware/authMiddleware.js';
+import { authenticateToken, authorizeRole } from '../../middleware/authMiddleware.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,7 +26,20 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage: storage });
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only JPG, PNG and WEBP images are allowed.'), false);
+  }
+};
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter
+});
 
 router.get('/status', authenticateToken, getKycStatus);
 // The Route: Expects 2 files named 'idFront' and 'idBack'
@@ -35,6 +48,6 @@ router.post('/submit',
   upload.fields([{ name: 'idFront', maxCount: 1 }, { name: 'idBack', maxCount: 1 }]), 
   submitKYC
 );
-router.post('/review', authenticateToken, reviewKYC);
+router.post('/review', authenticateToken, authorizeRole('ADMIN'), reviewKYC);
 
 export default router;

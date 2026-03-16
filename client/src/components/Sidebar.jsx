@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
-import { Home, Users, Heart, Settings, HelpCircle, Layers, LogOut, Shield, ShieldCheck, X } from 'lucide-react';
+import { LayoutDashboard, Heart, Gift, Phone, User, Users, LogOut, X, ShieldCheck } from 'lucide-react';
 import { commonStyles, sidebarStyles } from '../styles/index.styles';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -27,17 +27,17 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   };
 
-  const NavItem = ({ icon: Icon, label, path, isSpecial = false }) => {
-    const isActive = location.pathname === path || location.pathname.startsWith(path + '/');
+  const NavItem = ({ icon: Icon, label, to, isSpecial = false }) => {
+    const isActive = location.pathname === to || (to !== '/dashboard' && location.pathname.startsWith(to));
 
     return (
       <button
         onClick={() => {
-          navigate(path);
+          navigate(to);
           if (window.innerWidth < 768) onClose();
         }}
         className={`${sidebarStyles.navItemBase} ${isActive ? sidebarStyles.navItemActive :
-            isSpecial ? sidebarStyles.navItemSpecial : sidebarStyles.navItemInactive
+          isSpecial ? sidebarStyles.navItemSpecial : sidebarStyles.navItemInactive
           }`}
       >
         <Icon size={20} className={sidebarStyles.navItemIcon} />
@@ -60,8 +60,9 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* Logo */}
         <div className={sidebarStyles.logoSection}>
           <div>
-            <h1 className={sidebarStyles.logoTitle}>
-              🐘 <span className="text-gs-teal">Agilavetri</span> Ganesha
+            <h1 className={sidebarStyles.logoTitle + " flex items-center gap-3"}>
+              <img src="/Ganesha.jpeg" alt="Ganesha" className="w-9 h-9 rounded-full object-cover shadow-sm border border-gs-teal/10" />
+              <span className="leading-tight pt-1"><span className="text-gs-teal">Agilavetri</span> Ganesha</span>
             </h1>
             <p className={commonStyles.preTitle + " mt-1"}>॥ அகில வெற்றி கணேஷா ॥</p>
           </div>
@@ -80,14 +81,12 @@ const Sidebar = ({ isOpen, onClose }) => {
 
         {/* Navigation */}
         <nav className={sidebarStyles.navContainer}>
-          {isLoggedIn && <NavItem icon={Home} label="Dashboard" path="/dashboard" />}
-          <NavItem icon={Heart} label="Donate / Contribute" path="/donate" />
-          {isLoggedIn && <NavItem icon={Shield} label="Verify Identity (KYC)" path="/dashboard/kyc" />}
-          {isLoggedIn && <NavItem icon={Users} label="Invite" path="/dashboard/network" />}
-          
-          <div className="pt-4 mt-4 border-t border-gray-100">
-            <NavItem icon={HelpCircle} label="Help & Support" path="/help" isSpecial={true} />
-          </div>
+          {isLoggedIn && <NavItem to="/dashboard" icon={LayoutDashboard} label="DASHBOARD" />}
+          <NavItem to="/donate" icon={Heart} label="DONATE" />
+          {isLoggedIn && <NavItem to="/dashboard/kyc" icon={ShieldCheck} label="VERIFY KYC" />}
+          {isLoggedIn && <NavItem to="/dashboard/network" icon={Users} label="INVITE" />}
+          <NavItem to="/dashboard/support" icon={Phone} label="SUPPORT" />
+          {isLoggedIn && <NavItem to="/dashboard/profile" icon={User} label="PROFILE" />}
         </nav>
 
         {/* Logout */}

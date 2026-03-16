@@ -54,7 +54,9 @@ const LoginPage = () => {
 
         <div className={authStyles.headerWrapper}>
           <p className={commonStyles.preTitle}>॥ அகில வெற்றி கணேஷா ॥</p>
-          <div className={authStyles.headerEmoji}>🐘</div>
+          <div className={authStyles.headerEmoji}>
+            <img src="/Ganesha.jpeg" alt="Ganesha" className="w-20 h-20 rounded-full object-cover shadow-md mx-auto border-2 border-gs-teal/10" />
+          </div>
           <h1 className={authStyles.headerTitle}>
             Ganesha <span className="text-gs-teal">Seva</span>
           </h1>
@@ -108,10 +110,10 @@ const LoginPage = () => {
         </form>
 
         <div className={authStyles.footerBox}>
-          <p className="text-gray-500 text-sm font-medium">
+          <p className="text-white/40 text-[10px] font-bold tracking-[0.1em] uppercase">
             New devotee?{' '}
-            <Link to="/register" className="text-gs-teal font-bold hover:underline">
-              Join Ganesha Seva
+            <Link to="/register" className="text-[#FBDB8C] font-black hover:underline ml-1">
+              Join Seva Now
             </Link>
           </p>
         </div>

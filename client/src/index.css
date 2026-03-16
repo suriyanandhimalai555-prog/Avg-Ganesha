@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 body {
-  background-color: #F9F6F0; /* gs-cream fallback */
-  color: #1A1A3E; /* gs-navy */
+  background-color: #060B28; /* royal navy background */
+  color: #FFFFFF;
 }
 
 /* Custom Scrollbar */
@@ -12,19 +12,19 @@ body {
   width: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(45, 156, 138, 0.05); /* gs-teal */
+  background: rgba(251, 219, 140, 0.05); /* gold trace */
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(45, 156, 138, 0.3);
+  background: rgba(251, 219, 140, 0.2);
   border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(45, 156, 138, 0.6);
+  background: rgba(251, 219, 140, 0.4);
 }
 
 /* Devotional glow effect */
 .ganesha-glow {
-  box-shadow: 0 0 30px rgba(45, 156, 138, 0.15), 0 0 60px rgba(212, 175, 55, 0.05);
+  box-shadow: 0 0 30px rgba(251, 219, 140, 0.15), 0 0 60px rgba(251, 219, 140, 0.05);
 }
 
 /* Om symbol animation */

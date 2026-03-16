@@ -3,9 +3,18 @@
  */
 import { query } from '../../shared/db.js';
 
+let cachedCategories = null;
+let cachedCategoriesTime = 0;
+
 // --- Get all categories (public) ---
 export const getCategories = async (req, res) => {
   try {
+    const now = Date.now();
+    // 5-minute memory cache
+    if (cachedCategories && now - cachedCategoriesTime < 5 * 60 * 1000) {
+      return res.json(cachedCategories);
+    }
+
     const catResult = await query(
       `SELECT c.id, c.slug, c.name, c.has_fixed_price, c.display_order
        FROM donation_categories c
@@ -27,6 +36,9 @@ export const getCategories = async (req, res) => {
       displayOrder: c.display_order,
     }));
 
+    cachedCategories = categories;
+    cachedCategoriesTime = now;
+
     res.json(categories);
   } catch (err) {
     console.error('Categories error:', err);
@@ -42,13 +54,6 @@ export const submitDonation = async (req, res) => {
   const paymentProofPath = req.file ? `donations/${req.file.filename}` : null;
 
   try {
-    console.log('--- Donation Submission Debug ---');
-    console.log('Full body:', req.body);
-    console.log('categoryId:', categoryId, '| type:', typeof categoryId);
-    console.log('amount:', amount);
-    console.log('paymentProofPath:', paymentProofPath);
-    console.log('user_id:', user_id);
-
     if (!categoryId) {
       return res.status(400).json({ error: 'Category ID is required' });
     }
@@ -63,34 +68,48 @@ export const submitDonation = async (req, res) => {
       [categoryId]
     );
 
-    console.log('categoryCheck rows:', categoryCheck.rows);
-
     const category = categoryCheck.rows[0];
 
     if (!category) {
       return res.status(400).json({ error: `No category found for id: ${categoryId}` });
     }
 
-    console.log('slug from DB:', JSON.stringify(category.slug));
-    console.log('slug char codes:', [...category.slug].map(c => c.charCodeAt(0)));
-
     const isStatue = category.slug === 'statue_1_5_ft';
-    console.log('isStatue:', isStatue);
 
     let result;
     if (isStatue) {
-      console.log('>>> Inserting with statue_number...');
-      result = await query(
-        `INSERT INTO donations (
-          user_id, category_id, amount, payment_proof_path, statue_number, status
-        ) VALUES (
-          $1, $2, $3, $4, nextval('statue_number_seq'), 'PENDING'
-        ) RETURNING *`,
-        [user_id, categoryId, amount, paymentProofPath]
+      // Check if this user already has a statue_number from a previous donation
+      const existingStatueRes = await query(
+        `SELECT statue_number FROM donations
+         WHERE user_id = $1
+           AND statue_number IS NOT NULL
+         ORDER BY created_at ASC
+         LIMIT 1`,
+        [user_id]
       );
-      console.log('>>> statue_number assigned:', result.rows[0].statue_number);
+
+      const alreadyHasStatue = existingStatueRes.rows.length > 0;
+
+      if (alreadyHasStatue) {
+        // Repeat statue donation — their seat is already locked in, insert without statue_number
+        result = await query(
+          `INSERT INTO donations (
+            user_id, category_id, amount, payment_proof_path, statue_number, status
+          ) VALUES ($1, $2, $3, $4, NULL, 'PENDING') RETURNING *`,
+          [user_id, categoryId, amount, paymentProofPath]
+        );
+      } else {
+        // First statue donation — assign a new unique number from sequence
+        result = await query(
+          `INSERT INTO donations (
+            user_id, category_id, amount, payment_proof_path, statue_number, status
+          ) VALUES (
+            $1, $2, $3, $4, nextval('statue_number_seq'), 'PENDING'
+          ) RETURNING *`,
+          [user_id, categoryId, amount, paymentProofPath]
+        );
+      }
     } else {
-      console.log('>>> Standard insert (no statue_number)...');
       result = await query(
         `INSERT INTO donations (
           user_id, category_id, amount, payment_proof_path, status
@@ -133,38 +152,39 @@ export const getMyDonations = async (req, res) => {
 export const getMyDonationStats = async (req, res) => {
   const userId = req.user.id;
   try {
-    const totalResult = await query(
-      `SELECT COALESCE(SUM(amount), 0) as total
-       FROM donations WHERE user_id = $1 AND status = 'CONFIRMED'`,
-      [userId]
-    );
-    const breakdownResult = await query(
-      `SELECT dc.name as category_name, dc.slug, SUM(d.amount) as total
-       FROM donations d
-       LEFT JOIN donation_categories dc ON d.category_id = dc.id
-       WHERE d.user_id = $1 AND d.status = 'CONFIRMED'
-       GROUP BY dc.id, dc.name, dc.slug
-       ORDER BY total DESC`,
-      [userId]
-    );
-    const statue15Count = await query(
-      `SELECT COUNT(*) as count FROM donations
-       WHERE user_id = $1 AND status = 'CONFIRMED'
-       AND category_id = (SELECT id FROM donation_categories WHERE slug = 'statue_1_5_ft' LIMIT 1)`,
-      [userId]
-    );
-    const globalStatue15Count = await query(
-      `SELECT COUNT(*) as count FROM donations
-       WHERE status = 'CONFIRMED'
-       AND category_id = (SELECT id FROM donation_categories WHERE slug = 'statue_1_5_ft' LIMIT 1)`
-    );
-
-    const myStatueNumbers = await query(
-      `SELECT statue_number FROM donations
-       WHERE user_id = $1 AND status = 'CONFIRMED' AND statue_number IS NOT NULL
-       ORDER BY statue_number ASC`,
-      [userId]
-    );
+    const [totalResult, breakdownResult, statue15Count, globalStatue15Count, myStatueNumbers] = await Promise.all([
+      query(
+        `SELECT COALESCE(SUM(amount), 0) as total
+         FROM donations WHERE user_id = $1 AND status = 'CONFIRMED'`,
+        [userId]
+      ),
+      query(
+        `SELECT dc.name as category_name, dc.slug, SUM(d.amount) as total
+         FROM donations d
+         LEFT JOIN donation_categories dc ON d.category_id = dc.id
+         WHERE d.user_id = $1 AND d.status = 'CONFIRMED'
+         GROUP BY dc.id, dc.name, dc.slug
+         ORDER BY total DESC`,
+        [userId]
+      ),
+      query(
+        `SELECT COUNT(*) as count FROM donations
+         WHERE user_id = $1 AND status = 'CONFIRMED'
+         AND category_id = (SELECT id FROM donation_categories WHERE slug = 'statue_1_5_ft' LIMIT 1)`,
+        [userId]
+      ),
+      query(
+        `SELECT COUNT(*) as count FROM donations
+         WHERE status = 'CONFIRMED'
+         AND category_id = (SELECT id FROM donation_categories WHERE slug = 'statue_1_5_ft' LIMIT 1)`
+      ),
+      query(
+        `SELECT DISTINCT statue_number FROM donations
+         WHERE user_id = $1 AND status = 'CONFIRMED' AND statue_number IS NOT NULL
+         ORDER BY statue_number ASC`,
+        [userId]
+      )
+    ]);
 
     res.json({
       totalDonated: parseFloat(totalResult.rows[0]?.total || 0),
@@ -186,6 +206,39 @@ export const getMyDonationStats = async (req, res) => {
 // --- Admin: list donations (used for pending + history) ---
 export const getPendingDonations = async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 15;
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+    const statusFilter = req.query.status || 'ALL';
+
+    let conditions = [];
+    let values = [];
+
+    if (statusFilter !== 'ALL') {
+      values.push(statusFilter);
+      conditions.push(`d.status = $${values.length}`);
+    }
+
+    if (search) {
+      values.push(`%${search}%`);
+      conditions.push(`(u.full_name ILIKE $${values.length} OR u.email ILIKE $${values.length} OR dc.name ILIKE $${values.length})`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Get total count for pagination
+    const countResult = await query(
+      `SELECT COUNT(*)
+       FROM donations d
+       LEFT JOIN donation_categories dc ON d.category_id = dc.id
+       JOIN users u ON d.user_id = u.id
+       ${whereClause}`,
+      values
+    );
+    const totalItems = parseInt(countResult.rows[0].count);
+
+    // Get paginated data
     const result = await query(
       `SELECT d.id, d.user_id, d.amount, d.payment_proof_path, d.status, d.created_at, d.rejection_reason,
               dc.name as category_name, dc.slug as category_slug,
@@ -193,9 +246,21 @@ export const getPendingDonations = async (req, res) => {
        FROM donations d
        LEFT JOIN donation_categories dc ON d.category_id = dc.id
        JOIN users u ON d.user_id = u.id
-       ORDER BY d.created_at DESC`
+       ${whereClause}
+       ORDER BY d.created_at DESC
+       LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, limit, offset]
     );
-    res.json(result.rows);
+
+    res.json({
+      data: result.rows,
+      pagination: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: page,
+        itemsPerPage: limit
+      }
+    });
   } catch (err) {
     console.error('Pending donations error:', err);
     res.status(500).json({ error: 'Failed to fetch pending donations' });

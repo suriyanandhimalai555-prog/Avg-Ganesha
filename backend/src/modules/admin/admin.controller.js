@@ -16,11 +16,13 @@ function toRelativeUploadPath(fullPath) {
 // --- 1. Get System-Wide Stats ---
 export const getAdminStats = async (req, res) => {
   try {
-    const totalRes = await query('SELECT COUNT(*) FROM users');
-    const submittedRes = await query("SELECT COUNT(*) FROM users WHERE kyc_status = 'SUBMITTED'");
-    const approvedRes = await query("SELECT COUNT(*) FROM users WHERE kyc_status = 'APPROVED'");
-    const invitedRes = await query('SELECT COUNT(*) FROM users WHERE invited_by IS NOT NULL');
-    const pendingDonationsRes = await query("SELECT COUNT(*) FROM donations WHERE status = 'PENDING'");
+    const [totalRes, submittedRes, approvedRes, invitedRes, pendingDonationsRes] = await Promise.all([
+      query('SELECT COUNT(*) FROM users'),
+      query("SELECT COUNT(*) FROM users WHERE kyc_status = 'SUBMITTED'"),
+      query("SELECT COUNT(*) FROM users WHERE kyc_status = 'APPROVED'"),
+      query('SELECT COUNT(*) FROM users WHERE invited_by IS NOT NULL'),
+      query("SELECT COUNT(*) FROM donations WHERE status = 'PENDING'")
+    ]);
 
     res.json({
       totalUsers: parseInt(totalRes.rows[0].count),
@@ -66,9 +68,10 @@ export const getAllUsers = async (req, res) => {
 
     const dataQuery = `
       SELECT u.id, u.full_name, u.email, u.role, u.invite_code, u.invite_count, u.kyc_status, u.created_at,
-             (SELECT full_name FROM users WHERE id = u.invited_by) as invited_by_name,
+             inviter.full_name as invited_by_name,
              u.details->'kyc_docs' as kyc_docs
       FROM users u
+      LEFT JOIN users inviter ON u.invited_by = inviter.id
       ${whereClause}
       ORDER BY u.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

@@ -82,7 +82,9 @@ const RegisterPage = () => {
 
         <div className={authStyles.headerWrapper}>
           <p className={commonStyles.preTitle}>॥ அகில வெற்றி கணேஷா ॥</p>
-          <div className={authStyles.headerEmoji}>🐘</div>
+          <div className={authStyles.headerEmoji}>
+            <img src="/Ganesha.jpeg" alt="Ganesha" className="w-20 h-20 rounded-full object-cover shadow-md mx-auto border-2 border-gs-teal/10" />
+          </div>
           <h1 className={authStyles.headerTitle}>
             Join <span className="text-gs-teal">Ganesha Seva</span>
           </h1>
@@ -202,9 +204,9 @@ const RegisterPage = () => {
         </form>
 
         <div className={authStyles.footerBox}>
-          <p className="text-gray-500 text-sm font-medium">
+          <p className="text-white/40 text-[10px] font-bold tracking-[0.1em] uppercase">
             Already a devotee?{' '}
-            <Link to="/login" className="text-gs-teal font-bold hover:underline">Login Here</Link>
+            <Link to="/login" className="text-[#FBDB8C] font-black hover:underline ml-1">Login Here</Link>
           </p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, CheckCircle, AlertCircle, Shield, FileText } from 'lucide-react';
 import api from '../api/axios';
-import { commonStyles, kycStyles } from '../styles/index.styles';
+import { kycStyles } from '../styles/index.styles';
 
 const KycPage = () => {
   const [fileFront, setFileFront] = useState(null);
@@ -55,13 +55,13 @@ const KycPage = () => {
           <div className="flex flex-col items-center">
             <FileText className={kycStyles.uploadIconActive} size={32} />
             <p className={kycStyles.uploadFileName}>{file.name}</p>
-            <p className={kycStyles.uploadStatusText}>Ready to upload 🙏</p>
+            <p className={kycStyles.uploadStatusText}>SACRED ID PREPARED 🙏</p>
           </div>
         ) : (
           <div className="flex flex-col items-center">
             <Upload className={kycStyles.uploadIconInactive} size={32} />
-            <p className={kycStyles.uploadPlaceholderText}>Click or Drag & Drop</p>
-            <p className={kycStyles.uploadMimeText}>JPG, PNG or PDF</p>
+            <p className={kycStyles.uploadPlaceholderText}>TOUCH OR DRAG DOCUMENT</p>
+            <p className={kycStyles.uploadMimeText}>JPG, PNG OR PDF</p>
           </div>
         )}
       </div>
@@ -69,17 +69,24 @@ const KycPage = () => {
   );
 
   if (status === 'LOADING') {
-    return <div className={kycStyles.loadingText}>🐘 ॥ அகில வெற்றி கணேஷா ॥ Checking Status...</div>;
+    return (
+      <div className="min-h-screen bg-[#060B28] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <img src="/Ganesha.jpeg" alt="Loading" className="w-16 h-16 rounded-full animate-pulse border-2 border-[#FBDB8C]/30" />
+          <p className="text-[#FBDB8C] font-serif tracking-[0.2em] animate-pulse uppercase">READING DEVOTEE STATUS...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className={kycStyles.container}>
+    <div className={kycStyles.container + " overflow-y-auto"}>
       <div className={kycStyles.header}>
         <div className={kycStyles.headerIconWrapper}>
-          <Shield className="text-gs-teal" size={36} />
+          <Shield className="text-[#FBDB8C]" size={36} />
         </div>
-        <h2 className={kycStyles.headerTitle}>Identity Verification</h2>
-        <p className={kycStyles.headerSubtitle}>Complete your KYC to unlock full platform access as a verified devotee.</p>
+        <h2 className={kycStyles.headerTitle}>DEVOTEE VALIDATION</h2>
+        <p className={kycStyles.headerSubtitle}>Verify your identity to unlock full access to the Royal Portal.</p>
       </div>
 
       {/* Status Card */}
@@ -87,26 +94,26 @@ const KycPage = () => {
         <div className={kycStyles.statusCardDecoration} />
         <div className={kycStyles.statusCardContent}>
           {status === 'APPROVED' ? (
-            <CheckCircle className="text-[#10b981]" size={32} />
+            <CheckCircle className="text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.4)]" size={40} />
           ) : status === 'SUBMITTED' ? (
-            <CheckCircle className="text-blue-500" size={32} />
+            <div className="w-10 h-10 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
           ) : status === 'REJECTED' ? (
-            <AlertCircle className="text-red-500" size={32} />
+            <AlertCircle className="text-red-400" size={40} />
           ) : (
-            <AlertCircle className="text-gs-teal" size={32} />
+            <Shield className="text-[#FBDB8C]/40" size={40} />
           )}
 
           <div>
-            <p className={kycStyles.statusLabel}>Verification Status</p>
+            <p className={kycStyles.statusLabel}>VALIDATION PROGRESS:</p>
             <p className={`${kycStyles.statusValue} ${
               status === 'APPROVED' ? kycStyles.statusValueApproved :
               status === 'SUBMITTED' ? kycStyles.statusValueSubmitted :
               status === 'REJECTED' ? kycStyles.statusValueRejected : kycStyles.statusValuePending
             }`}>
-              {status === 'PENDING' && 'Pending Verification'}
-              {status === 'SUBMITTED' && 'Under Review'}
-              {status === 'APPROVED' && '✅ Verified Devotee'}
-              {status === 'REJECTED' && '❌ Rejected — Please Resubmit'}
+              {status === 'PENDING' && 'PENDING SUBMISSION'}
+              {status === 'SUBMITTED' && 'UNDER ROYAL REVIEW'}
+              {status === 'APPROVED' && 'VERIFIED DEVOTEE'}
+              {status === 'REJECTED' && 'RESUBMISSION REQUIRED'}
             </p>
           </div>
         </div>
@@ -118,15 +125,15 @@ const KycPage = () => {
 
           {status === 'REJECTED' && (
             <div className={kycStyles.rejectionBox}>
-              <p className={kycStyles.rejectionTitle}>Your previous submission was rejected.</p>
-              {rejectionReason && <p className={kycStyles.rejectionReason}>{rejectionReason}</p>}
-              <p className="mt-2 text-red-600">Please ensure your ID is clear and try again.</p>
+              <p className={kycStyles.rejectionTitle}>PREVIOUS ATTEMPT DECLINED</p>
+              {rejectionReason && <p className={kycStyles.rejectionReason}>Reason: {rejectionReason}</p>}
+              <p className="mt-3 opacity-60">Please ensure the document is clear and matches your profile details.</p>
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <FileUploadBox label="Government ID (Front)" file={fileFront} setFile={setFileFront} />
-            <FileUploadBox label="Government ID (Back)" file={fileBack} setFile={setFileBack} />
+            <FileUploadBox label="GOVERNMENT ID (FRONT)" file={fileFront} setFile={setFileFront} />
+            <FileUploadBox label="GOVERNMENT ID (BACK)" file={fileBack} setFile={setFileBack} />
           </div>
 
           <button
@@ -138,24 +145,24 @@ const KycPage = () => {
                 : kycStyles.submitBtnEnabled
             }`}
           >
-            {loading ? '🙏 Submitting Documents...' : 'Submit Documents for Verification'}
+            {loading ? 'SUBMITTING TO TEMPLE...' : 'SUBMIT FOR VALIDATION'}
           </button>
         </form>
       )}
 
       {status === 'SUBMITTED' && (
         <div className={kycStyles.infoCard}>
-          <div className="text-5xl mb-4">🕉️</div>
-          <p className={kycStyles.infoTitle}>Your documents are being reviewed by our team.</p>
-          <p className={kycStyles.infoSubtitle}>This usually takes 24–48 hours. Thank you for your patience, devotee.</p>
+          <div className="text-5xl mb-6">🕉️</div>
+          <p className={kycStyles.infoTitle}>DOCUMENTS UNDER REVIEW</p>
+          <p className={kycStyles.infoSubtitle}>Our administrators are validating your identity. Please return in 24 hours.</p>
         </div>
       )}
 
       {status === 'APPROVED' && (
         <div className={kycStyles.successCard}>
-          <div className="text-5xl mb-4">✅</div>
-          <p className={kycStyles.successTitle}>You are a verified devotee of Ganesha Seva.</p>
-          <p className={kycStyles.successSubtitle}>You now have full access to all platform features.</p>
+          <div className="text-5xl mb-6">🔱</div>
+          <p className={kycStyles.successTitle}>IDENTITY FULLY VERIFIED</p>
+          <p className={kycStyles.successSubtitle}>You are now recognized as a lifetime verified devotee in our portal.</p>
         </div>
       )}
     </div>
