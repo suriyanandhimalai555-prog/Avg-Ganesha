@@ -2,6 +2,8 @@ import { query } from '../../shared/db.js';
 
 function toRelativeUploadPath(fullPath) {
   if (!fullPath || typeof fullPath !== 'string') return null;
+  // Cloudinary URLs — return as-is
+  if (fullPath.startsWith('http://') || fullPath.startsWith('https://')) return fullPath;
   const normalized = fullPath.replace(/\\/g, '/');
   const afterUploads = normalized.match(/uploads\/(.+)$/i);
   if (afterUploads) return afterUploads[1];

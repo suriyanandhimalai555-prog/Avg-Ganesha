@@ -1,4 +1,5 @@
 import { query } from '../../shared/db.js';
+import { uploadToCloudinary } from '../../shared/cloudinary.js';
 
 // --- 1. SUBMIT KYC ---
 export const submitKYC = async (req, res) => {
@@ -8,16 +9,19 @@ export const submitKYC = async (req, res) => {
     return res.status(400).json({ error: 'Both ID Front and Back are required' });
   }
 
-  const idFrontPath = req.files.idFront[0].path;
-  const idBackPath = req.files.idBack[0].path;
-
   try {
+    // Upload both files to Cloudinary
+    const [frontUrl, backUrl] = await Promise.all([
+      uploadToCloudinary(req.files.idFront[0].path, 'kyc'),
+      uploadToCloudinary(req.files.idBack[0].path, 'kyc'),
+    ]);
+
     await query(
       `UPDATE users 
        SET kyc_status = 'SUBMITTED', 
            details = jsonb_set(COALESCE(details, '{}'), '{kyc_docs}', $1)
        WHERE id = $2`,
-      [JSON.stringify({ front: idFrontPath, back: idBackPath }), userId]
+      [JSON.stringify({ front: frontUrl, back: backUrl }), userId]
     );
 
     res.json({ message: 'KYC Submitted Successfully' });

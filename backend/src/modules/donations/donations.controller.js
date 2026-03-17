@@ -2,6 +2,7 @@
  * Donations controller - submit, list, admin approve/reject.
  */
 import { query } from '../../shared/db.js';
+import { uploadToCloudinary } from '../../shared/cloudinary.js';
 
 let cachedCategories = null;
 let cachedCategoriesTime = 0;
@@ -51,16 +52,18 @@ export const submitDonation = async (req, res) => {
   const categoryId = req.body.categoryId ?? req.body.category_id;
   const amount = req.body.amount;
   const user_id = req.user.id;
-  const paymentProofPath = req.file ? `donations/${req.file.filename}` : null;
 
   try {
     if (!categoryId) {
       return res.status(400).json({ error: 'Category ID is required' });
     }
 
-    if (!paymentProofPath) {
+    if (!req.file) {
       return res.status(400).json({ error: 'Payment proof is required' });
     }
+
+    // Upload payment proof to Cloudinary
+    const paymentProofUrl = await uploadToCloudinary(req.file.path, 'donations');
 
     // Force cast to integer to be safe
     const categoryCheck = await query(
@@ -96,7 +99,7 @@ export const submitDonation = async (req, res) => {
           `INSERT INTO donations (
             user_id, category_id, amount, payment_proof_path, statue_number, status
           ) VALUES ($1, $2, $3, $4, NULL, 'PENDING') RETURNING *`,
-          [user_id, categoryId, amount, paymentProofPath]
+          [user_id, categoryId, amount, paymentProofUrl]
         );
       } else {
         // First statue donation — assign a new unique number from sequence
@@ -106,7 +109,7 @@ export const submitDonation = async (req, res) => {
           ) VALUES (
             $1, $2, $3, $4, nextval('statue_number_seq'), 'PENDING'
           ) RETURNING *`,
-          [user_id, categoryId, amount, paymentProofPath]
+          [user_id, categoryId, amount, paymentProofUrl]
         );
       }
     } else {
@@ -114,7 +117,7 @@ export const submitDonation = async (req, res) => {
         `INSERT INTO donations (
           user_id, category_id, amount, payment_proof_path, status
         ) VALUES ($1, $2, $3, $4, 'PENDING') RETURNING *`,
-        [user_id, categoryId, amount, paymentProofPath]
+        [user_id, categoryId, amount, paymentProofUrl]
       );
     }
 

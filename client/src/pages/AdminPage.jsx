@@ -8,6 +8,12 @@ import { Shield, Users, LogOut, Search, Calendar, Mail, CheckCircle, Clock, File
 import { commonStyles, adminStyles } from '../styles/index.styles';
 
 const AdminPage = () => {
+  // Helper: detect if path is a full Cloudinary URL or a legacy local path
+  const getImageUrl = (path) => {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return `${API_BASE_URL}/uploads/${path}`;
+  };
   const [stats, setStats] = useState({ totalUsers: 0, submittedKYC: 0, approvedKYC: 0, totalInvited: 0, pendingDonations: 0 });
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -500,9 +506,9 @@ const AdminPage = () => {
                   <div className="space-y-4">
                     <p className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.3em] mb-2">Primary ID Front</p>
                     <div className="bg-white/5 p-2 rounded-2xl border border-white/5 shadow-2xl">
-                      <img src={`${API_BASE_URL}/uploads/${kycViewUser.kyc_docs.front}`} alt="ID Front" className="w-full rounded-xl object-contain max-h-[50vh] shadow-inner" />
+                      <img src={getImageUrl(kycViewUser.kyc_docs.front)} alt="ID Front" className="w-full rounded-xl object-contain max-h-[50vh] shadow-inner" />
                     </div>
-                    <a href={`${API_BASE_URL}/uploads/${kycViewUser.kyc_docs.front}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-[10px] text-[#FBDB8C] font-black uppercase tracking-widest hover:text-white transition-all underline decoration-[#FBDB8C]/20">
+                    <a href={getImageUrl(kycViewUser.kyc_docs.front)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-[10px] text-[#FBDB8C] font-black uppercase tracking-widest hover:text-white transition-all underline decoration-[#FBDB8C]/20">
                       <ExternalLink size={14} /> Inspect Full Document
                     </a>
                   </div>
@@ -511,9 +517,9 @@ const AdminPage = () => {
                   <div className="space-y-4">
                     <p className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.3em] mb-2">Primary ID Back</p>
                     <div className="bg-white/5 p-2 rounded-2xl border border-white/5 shadow-2xl">
-                      <img src={`${API_BASE_URL}/uploads/${kycViewUser.kyc_docs.back}`} alt="ID Back" className="w-full rounded-xl object-contain max-h-[50vh] shadow-inner" />
+                      <img src={getImageUrl(kycViewUser.kyc_docs.back)} alt="ID Back" className="w-full rounded-xl object-contain max-h-[50vh] shadow-inner" />
                     </div>
-                    <a href={`${API_BASE_URL}/uploads/${kycViewUser.kyc_docs.back}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-[10px] text-[#FBDB8C] font-black uppercase tracking-widest hover:text-white transition-all underline decoration-[#FBDB8C]/20">
+                    <a href={getImageUrl(kycViewUser.kyc_docs.back)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-[10px] text-[#FBDB8C] font-black uppercase tracking-widest hover:text-white transition-all underline decoration-[#FBDB8C]/20">
                       <ExternalLink size={14} /> Inspect Full Document
                     </a>
                   </div>
@@ -545,7 +551,7 @@ const AdminPage = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <a href={`${API_BASE_URL}/uploads/${proofViewDonation.payment_proof_path}`} target="_blank" rel="noopener noreferrer"
+                  <a href={getImageUrl(proofViewDonation.payment_proof_path)} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-[#FBDB8C] border border-[#FBDB8C]/20 rounded-xl hover:bg-white/5 transition-all uppercase tracking-widest">
                     <ExternalLink size={16} /> Original
                   </a>
@@ -554,9 +560,10 @@ const AdminPage = () => {
               </div>
               <div className="flex-1 overflow-auto p-10 bg-black/20 min-h-[300px] flex items-center justify-center">
                 {proofViewDonation.payment_proof_path && (() => {
-                  const ext = (proofViewDonation.payment_proof_path || '').split('.').pop()?.toLowerCase();
-                  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
-                  const src = `${API_BASE_URL}/uploads/${proofViewDonation.payment_proof_path}`;
+                  const path = proofViewDonation.payment_proof_path || '';
+                  const ext = path.split('.').pop()?.split('?')[0]?.toLowerCase();
+                  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) || path.includes('cloudinary.com');
+                  const src = getImageUrl(proofViewDonation.payment_proof_path);
                   return isImage ? (
                     <div className="p-3 bg-white/5 rounded-3xl border border-white/5 shadow-2xl">
                       <img src={src} alt="Payment proof" className="max-w-full max-h-[65vh] object-contain rounded-2xl shadow-inner" />
