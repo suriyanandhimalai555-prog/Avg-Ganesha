@@ -399,7 +399,7 @@ export const royalDashboardStyles = {
 
   cardIcon: "w-10 h-10 mb-3 text-[#FBDB8C] drop-shadow-[0_0_8px_rgba(251,219,140,0.4)]",
   cardLabel: "text-[10px] font-bold text-[#FBDB8C]/60 uppercase tracking-[0.2em] mb-2",
-  cardValue: "text-2xl font-serif font-bold text-white tracking-widest uppercase",
+  cardValue: "text-2xl font-serif font-bold text-white tracking-widest uppercase truncate w-full px-4 text-center",
 
   // Status Badge (Large)
   statusBadge: "relative w-48 h-48 md:w-56 md:h-56 flex flex-col items-center justify-center mx-auto",

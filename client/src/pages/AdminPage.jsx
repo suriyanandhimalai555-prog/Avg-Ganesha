@@ -4,7 +4,7 @@ import { useDispatch } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL, API_ROUTES } from '../config/api';
-import { Shield, Users, LogOut, Search, Calendar, Mail, CheckCircle, Clock, FileText, Heart, Image, X, ExternalLink } from 'lucide-react';
+import { Shield, Users, LogOut, Search, Calendar, Mail, CheckCircle, Clock, FileText, Heart, Image, X, ExternalLink, Edit } from 'lucide-react';
 import { commonStyles, adminStyles } from '../styles/index.styles';
 
 const AdminPage = () => {
@@ -35,6 +35,9 @@ const AdminPage = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [proofViewDonation, setProofViewDonation] = useState(null);
   const [kycViewUser, setKycViewUser] = useState(null);
+
+  const [editUserModal, setEditUserModal] = useState({ isOpen: false, user: null, email: '', phone_number: '' });
+  const [editUserLoading, setEditUserLoading] = useState(false);
 
   const [bankDetails, setBankDetails] = useState({
     bank_account_name: '', bank_account_number: '', bank_ifsc: '', bank_branch: '', bank_customer_id: '',
@@ -110,6 +113,27 @@ const AdminPage = () => {
   };
 
   const handleLogout = () => { dispatch(logout()); navigate('/login'); };
+
+  const openEditUserModal = (user) => {
+    setEditUserModal({ isOpen: true, user, email: user.email || '', phone_number: user.phone_number || '' });
+  };
+
+  const closeEditUserModal = () => {
+    setEditUserModal({ isOpen: false, user: null, email: '', phone_number: '' });
+  };
+
+  const handleUpdateUser = async () => {
+    setEditUserLoading(true);
+    try {
+      await api.put(`/api/admin/users/${editUserModal.user.id}`, { email: editUserModal.email, phone_number: editUserModal.phone_number });
+      fetchUsers();
+      closeEditUserModal();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update user details.');
+    } finally {
+      setEditUserLoading(false);
+    }
+  };
 
   const openActionModal = (type, id, status) => {
     setActionModal({ isOpen: true, actionType: type, targetId: id, targetStatus: status });
@@ -274,6 +298,7 @@ const AdminPage = () => {
                           <div className="ml-5">
                             <div className="text-sm font-black text-white tracking-widest uppercase mb-1">{u.full_name}</div>
                             <div className="text-[10px] text-white/30 flex items-center gap-1.5 font-bold"><Mail size={12} className="text-[#FBDB8C]" /> {u.email}</div>
+                            {u.phone_number && <div className="text-[10px] text-white/30 flex items-center gap-1.5 font-bold mt-1">📞 {u.phone_number}</div>}
                           </div>
                         </div>
                       </td>
@@ -300,21 +325,24 @@ const AdminPage = () => {
                         {u.invited_by_name || <span className="opacity-20">—</span>}
                       </td>
                       <td className="px-8 py-6 whitespace-nowrap">
-                        <div className="flex flex-col gap-2">
-                          {(u.kyc_docs?.front || u.kyc_docs?.back) && (
-                            <button type="button" onClick={() => setKycViewUser(u)}
-                              className="text-[9px] w-fit px-3 py-1.5 bg-[#FBDB8C]/5 text-[#FBDB8C] border border-[#FBDB8C]/20 rounded-lg font-black uppercase tracking-widest hover:bg-[#FBDB8C]/10 transition-all flex items-center gap-1.5 align-middle">
-                              <Image size={10} /> Docs
+                        <div className="flex flex-col gap-2 min-w-[140px]">
+                          <div className="flex items-center gap-2 w-full">
+                            {(u.kyc_docs?.front || u.kyc_docs?.back) && (
+                              <button type="button" onClick={() => setKycViewUser(u)}
+                                className="text-[9px] flex-1 justify-center px-3 py-2 bg-[#FBDB8C]/5 text-[#FBDB8C] border border-[#FBDB8C]/20 rounded-lg font-black uppercase tracking-widest hover:bg-[#FBDB8C]/10 transition-all flex items-center gap-1.5 align-middle">
+                                <FileText size={10} /> Docs
+                              </button>
+                            )}
+                            <button type="button" onClick={() => openEditUserModal(u)}
+                              className="text-[9px] flex-1 justify-center px-3 py-2 bg-white/5 text-white/60 border border-white/10 rounded-lg font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all flex items-center gap-1.5 align-middle">
+                              <Edit size={10} /> Edit
                             </button>
-                          )}
+                          </div>
                           {u.kyc_status !== 'APPROVED' && (
-                            <div className="flex gap-2">
-                              <button type="button" onClick={() => openActionModal('KYC', u.id, 'APPROVED')} className={adminStyles.actionBtnApprove}>✓ Approve</button>
-                              <button type="button" onClick={() => openActionModal('KYC', u.id, 'REJECTED')} className={adminStyles.actionBtnReject}>✗ Reject</button>
+                            <div className="flex items-center gap-2 w-full">
+                              <button type="button" onClick={() => openActionModal('KYC', u.id, 'APPROVED')} className={`${adminStyles.actionBtnApprove} flex-1 justify-center flex items-center gap-1.5 !px-2`}>✓ Approve</button>
+                              <button type="button" onClick={() => openActionModal('KYC', u.id, 'REJECTED')} className={`${adminStyles.actionBtnReject} flex-1 justify-center flex items-center gap-1.5 !px-2`}>✗ Reject</button>
                             </div>
-                          )}
-                          {u.kyc_status === 'APPROVED' && !(u.kyc_docs?.front || u.kyc_docs?.back) && (
-                            <span className="text-white/20 text-[10px] font-bold">—</span>
                           )}
                         </div>
                       </td>
@@ -583,6 +611,36 @@ const AdminPage = () => {
                 <button type="button" onClick={() => setProofViewDonation(null)} className={commonStyles.buttonSecondary}>Return</button>
                 <button type="button" onClick={() => openActionModal('DONATION', proofViewDonation.id, 'REJECTED')} disabled={actionLoading} className={adminStyles.actionBtnReject + " px-8 py-3.5"}>✗ Reject Seva</button>
                 <button type="button" onClick={() => openActionModal('DONATION', proofViewDonation.id, 'CONFIRMED')} disabled={actionLoading} className={adminStyles.actionBtnApprove + " px-8 py-3.5"}>✓ Accept Seva</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Edit User Modal ── */}
+        {editUserModal.isOpen && (
+          <div className={commonStyles.modalOverlay} onClick={closeEditUserModal}>
+            <div className="bg-[#060B28] border border-[#FBDB8C]/30 rounded-3xl p-8 max-w-sm w-full shadow-[0_0_60px_rgba(0,0,0,0.8)] relative" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-xl font-serif font-black text-[#FBDB8C] tracking-widest uppercase mb-4">Edit Devotee Info</h3>
+              
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em] mb-2 block">Email Address</label>
+                  <input type="email" value={editUserModal.email} onChange={(e) => setEditUserModal({ ...editUserModal, email: e.target.value })}
+                    className="w-full bg-white/5 border border-[#FBDB8C]/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[#FBDB8C]/40 outline-none transition-all placeholder-white/20" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em] mb-2 block">Phone Number</label>
+                  <input type="text" value={editUserModal.phone_number} onChange={(e) => setEditUserModal({ ...editUserModal, phone_number: e.target.value })}
+                    className="w-full bg-white/5 border border-[#FBDB8C]/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[#FBDB8C]/40 outline-none transition-all placeholder-white/20" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={closeEditUserModal} className={commonStyles.buttonSecondary + " !px-6 !py-3"}>Cancel</button>
+                <button type="button" onClick={handleUpdateUser} disabled={editUserLoading}
+                  className="px-6 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all active:scale-95 text-[9px]">
+                  {editUserLoading ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
             </div>
           </div>

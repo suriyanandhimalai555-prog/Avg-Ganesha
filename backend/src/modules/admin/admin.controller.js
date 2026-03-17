@@ -69,7 +69,7 @@ export const getAllUsers = async (req, res) => {
     const totalItems = parseInt(countResult.rows[0].count);
 
     const dataQuery = `
-      SELECT u.id, u.full_name, u.email, u.role, u.invite_code, u.invite_count, u.kyc_status, u.created_at,
+      SELECT u.id, u.full_name, u.email, u.phone_number, u.role, u.invite_code, u.invite_count, u.kyc_status, u.created_at,
              inviter.full_name as invited_by_name,
              u.details->'kyc_docs' as kyc_docs
       FROM users u
@@ -154,5 +154,51 @@ export const adminReviewKYC = async (req, res) => {
   } catch (err) {
     console.error('KYC Review Error:', err);
     res.status(500).json({ error: 'Server error updating KYC' });
+  }
+};
+
+// --- 5. Edit User Details ---
+export const updateUserDetails = async (req, res) => {
+  const { userId } = req.params;
+  const { email, phone_number } = req.body;
+
+  try {
+    // Basic validation
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Check if another user has this email
+    const emailCheck = await query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+    if (emailCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'Email is already in use by another user' });
+    }
+
+    if (phone_number) {
+      const phoneCheck = await query('SELECT id FROM users WHERE phone_number = $1 AND id != $2', [phone_number, userId]);
+      if (phoneCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'Phone number is already in use by another user' });
+      }
+    }
+
+    const updateRes = await query(
+      `UPDATE users 
+       SET email = $1, phone_number = $2, updated_at = NOW() 
+       WHERE id = $3 
+       RETURNING id, full_name, email, phone_number`,
+      [email, phone_number || null, userId]
+    );
+
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ 
+      message: 'User details updated successfully',
+      user: updateRes.rows[0]
+    });
+  } catch (err) {
+    console.error('Update User Details Error:', err);
+    res.status(500).json({ error: 'Server error updating user details' });
   }
 };
