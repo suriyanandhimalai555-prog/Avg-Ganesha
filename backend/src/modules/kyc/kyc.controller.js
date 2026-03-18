@@ -1,5 +1,5 @@
 import { query } from '../../shared/db.js';
-import { uploadToCloudinary } from '../../shared/cloudinary.js';
+import { uploadToS3 } from '../../shared/s3.js';
 
 // --- 1. SUBMIT KYC ---
 export const submitKYC = async (req, res) => {
@@ -10,10 +10,10 @@ export const submitKYC = async (req, res) => {
   }
 
   try {
-    // Upload both files to Cloudinary
+    // Upload both files to S3
     const [frontUrl, backUrl] = await Promise.all([
-      uploadToCloudinary(req.files.idFront[0].path, 'kyc'),
-      uploadToCloudinary(req.files.idBack[0].path, 'kyc'),
+      uploadToS3(req.files.idFront[0].path, 'kyc'),
+      uploadToS3(req.files.idBack[0].path, 'kyc'),
     ]);
 
     await query(

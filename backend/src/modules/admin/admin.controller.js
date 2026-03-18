@@ -1,16 +1,18 @@
 import { query } from '../../shared/db.js';
+import { getS3SignedUrl } from '../../shared/s3.js';
 
 function toRelativeUploadPath(fullPath) {
   if (!fullPath || typeof fullPath !== 'string') return null;
-  // Cloudinary URLs — return as-is
-  if (fullPath.startsWith('http://') || fullPath.startsWith('https://')) return fullPath;
+  // S3 URIs and legacy Cloudinary/HTTPS URLs — return as-is (will be signed later)
+  if (fullPath.startsWith('http://') || fullPath.startsWith('https://') || fullPath.startsWith('s3://')) return fullPath;
   const normalized = fullPath.replace(/\\/g, '/');
   const afterUploads = normalized.match(/uploads\/(.+)$/i);
   if (afterUploads) return afterUploads[1];
-  if (normalized.startsWith('kyc/') || normalized.startsWith('donations/')) return normalized;
+  if (normalized.startsWith('kyc/') || normalized.startsWith('donations/') || normalized.startsWith('proofs/')) return normalized;
   const filename = normalized.split('/').pop();
-  if (filename && (normalized.includes('kyc') || normalized.includes('donations'))) {
-    return normalized.includes('kyc') ? `kyc/${filename}` : `donations/${filename}`;
+  if (filename && (normalized.includes('kyc') || normalized.includes('donations') || normalized.includes('proofs'))) {
+    if (normalized.includes('kyc')) return `kyc/${filename}`;
+    return `proofs/${filename}`;
   }
   return normalized;
 }
@@ -200,5 +202,20 @@ export const updateUserDetails = async (req, res) => {
   } catch (err) {
     console.error('Update User Details Error:', err);
     res.status(500).json({ error: 'Server error updating user details' });
+  }
+};
+
+// --- 6. Generate a pre-signed URL for a private S3 object ---
+export const getSignedImageUrl = async (req, res) => {
+  const { s3Uri } = req.body;
+  if (!s3Uri) {
+    return res.status(400).json({ error: 'Missing s3Uri' });
+  }
+  try {
+    const signedUrl = await getS3SignedUrl(s3Uri, 3600); // valid 1 hour
+    res.json({ url: signedUrl });
+  } catch (err) {
+    console.error('Sign URL Error:', err);
+    res.status(500).json({ error: 'Failed to generate signed URL' });
   }
 };

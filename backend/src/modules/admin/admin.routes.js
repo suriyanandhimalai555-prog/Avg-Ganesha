@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticateToken, authorizeRole } from '../../middleware/authMiddleware.js';
-import { getAdminStats, getAllUsers, updateUserRole, adminReviewKYC, updateUserDetails } from './admin.controller.js';
+import { getAdminStats, getAllUsers, updateUserRole, adminReviewKYC, updateUserDetails, getSignedImageUrl } from './admin.controller.js';
 
 const router = express.Router();
 
@@ -12,5 +12,6 @@ router.get('/users', getAllUsers);
 router.post('/role', updateUserRole);
 router.post('/kyc-review', adminReviewKYC);
 router.put('/users/:userId', updateUserDetails);
+router.post('/signed-url', getSignedImageUrl);
 
 export default router;

@@ -6,14 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL, API_ROUTES } from '../config/api';
 import { Shield, Users, LogOut, Search, Calendar, Mail, CheckCircle, Clock, FileText, Heart, Image, X, ExternalLink, Edit } from 'lucide-react';
 import { commonStyles, adminStyles } from '../styles/index.styles';
+import { S3Image, S3Anchor, getImageUrl } from '../utils/s3Utils.jsx';
 
 const AdminPage = () => {
-  // Helper: detect if path is a full Cloudinary URL or a legacy local path
-  const getImageUrl = (path) => {
-    if (!path) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    return `${API_BASE_URL}/uploads/${path}`;
-  };
   const [stats, setStats] = useState({ totalUsers: 0, submittedKYC: 0, approvedKYC: 0, totalInvited: 0, pendingDonations: 0 });
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -534,22 +529,22 @@ const AdminPage = () => {
                   <div className="space-y-4">
                     <p className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.3em] mb-2">Primary ID Front</p>
                     <div className="bg-white/5 p-2 rounded-2xl border border-white/5 shadow-2xl">
-                      <img src={getImageUrl(kycViewUser.kyc_docs.front)} alt="ID Front" className="w-full rounded-xl object-contain max-h-[50vh] shadow-inner" />
+                      <S3Image src={kycViewUser.kyc_docs.front} alt="ID Front" className="w-full rounded-xl object-contain max-h-[50vh] shadow-inner" />
                     </div>
-                    <a href={getImageUrl(kycViewUser.kyc_docs.front)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-[10px] text-[#FBDB8C] font-black uppercase tracking-widest hover:text-white transition-all underline decoration-[#FBDB8C]/20">
+                    <S3Anchor src={kycViewUser.kyc_docs.front} className="inline-flex items-center gap-2 text-[10px] text-[#FBDB8C] font-black uppercase tracking-widest hover:text-white transition-all underline decoration-[#FBDB8C]/20">
                       <ExternalLink size={14} /> Inspect Full Document
-                    </a>
+                    </S3Anchor>
                   </div>
                 )}
                 {kycViewUser.kyc_docs?.back && (
                   <div className="space-y-4">
                     <p className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.3em] mb-2">Primary ID Back</p>
                     <div className="bg-white/5 p-2 rounded-2xl border border-white/5 shadow-2xl">
-                      <img src={getImageUrl(kycViewUser.kyc_docs.back)} alt="ID Back" className="w-full rounded-xl object-contain max-h-[50vh] shadow-inner" />
+                      <S3Image src={kycViewUser.kyc_docs.back} alt="ID Back" className="w-full rounded-xl object-contain max-h-[50vh] shadow-inner" />
                     </div>
-                    <a href={getImageUrl(kycViewUser.kyc_docs.back)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-[10px] text-[#FBDB8C] font-black uppercase tracking-widest hover:text-white transition-all underline decoration-[#FBDB8C]/20">
+                    <S3Anchor src={kycViewUser.kyc_docs.back} className="inline-flex items-center gap-2 text-[10px] text-[#FBDB8C] font-black uppercase tracking-widest hover:text-white transition-all underline decoration-[#FBDB8C]/20">
                       <ExternalLink size={14} /> Inspect Full Document
-                    </a>
+                    </S3Anchor>
                   </div>
                 )}
               </div>
@@ -579,10 +574,10 @@ const AdminPage = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <a href={getImageUrl(proofViewDonation.payment_proof_path)} target="_blank" rel="noopener noreferrer"
+                  <S3Anchor src={proofViewDonation.payment_proof_path}
                     className="flex items-center gap-2 px-5 py-2.5 text-[10px] font-black text-[#FBDB8C] border border-[#FBDB8C]/20 rounded-xl hover:bg-white/5 transition-all uppercase tracking-widest">
                     <ExternalLink size={16} /> Original
-                  </a>
+                  </S3Anchor>
                   <button type="button" onClick={() => setProofViewDonation(null)} className="p-3 rounded-2xl hover:bg-white/10 text-white/40 hover:text-white transition-all"><X size={24} /></button>
                 </div>
               </div>
@@ -590,11 +585,11 @@ const AdminPage = () => {
                 {proofViewDonation.payment_proof_path && (() => {
                   const path = proofViewDonation.payment_proof_path || '';
                   const ext = path.split('.').pop()?.split('?')[0]?.toLowerCase();
-                  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) || path.includes('cloudinary.com');
-                  const src = getImageUrl(proofViewDonation.payment_proof_path);
+                  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) || path.includes('amazonaws.com') || path.includes('cloudinary.com') || path.startsWith('s3://');
+                  
                   return isImage ? (
                     <div className="p-3 bg-white/5 rounded-3xl border border-white/5 shadow-2xl">
-                      <img src={src} alt="Payment proof" className="max-w-full max-h-[65vh] object-contain rounded-2xl shadow-inner" />
+                      <S3Image src={path} alt="Payment proof" className="max-w-full max-h-[65vh] object-contain rounded-2xl shadow-inner" />
                     </div>
                   ) : (
                     <div className="text-center space-y-4">
@@ -602,7 +597,7 @@ const AdminPage = () => {
                         <FileText size={40} className="text-[#FBDB8C]/40" />
                       </div>
                       <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em]">Preview unavailable</p>
-                      <a href={src} target="_blank" rel="noopener noreferrer" className="inline-block text-[#FBDB8C] font-black text-xs uppercase tracking-widest underline">Download File</a>
+                      <S3Anchor src={path} className="inline-block text-[#FBDB8C] font-black text-xs uppercase tracking-widest underline">Download File</S3Anchor>
                     </div>
                   );
                 })()}

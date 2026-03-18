@@ -2,7 +2,7 @@
  * Donations controller - submit, list, admin approve/reject.
  */
 import { query } from '../../shared/db.js';
-import { uploadToCloudinary } from '../../shared/cloudinary.js';
+import { uploadToS3 } from '../../shared/s3.js';
 
 let cachedCategories = null;
 let cachedCategoriesTime = 0;
@@ -62,8 +62,8 @@ export const submitDonation = async (req, res) => {
       return res.status(400).json({ error: 'Payment proof is required' });
     }
 
-    // Upload payment proof to Cloudinary
-    const paymentProofUrl = await uploadToCloudinary(req.file.path, 'donations');
+    // Upload payment proof to S3
+    const paymentProofUrl = await uploadToS3(req.file.path, 'proofs');
 
     // Force cast to integer to be safe
     const categoryCheck = await query(
