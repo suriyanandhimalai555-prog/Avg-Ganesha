@@ -1,15 +1,22 @@
 import { query } from '../../shared/db.js';
+import { getCachedData, invalidateCache } from '../../shared/redis.js';
+
+const CACHE_KEYS = {
+  BANK_SETTINGS: 'settings:bank'
+};
 
 // GET: Fetch all bank details
 export const getBankDetails = async (req, res) => {
   try {
-    const result = await query("SELECT key, value FROM system_settings WHERE key LIKE 'bank_%'");
-    
-    // Convert array of rows [{key: 'x', value: 'y'}] into a single object { x: 'y' }
-    const settings = result.rows.reduce((acc, row) => {
-      acc[row.key] = row.value;
-      return acc;
-    }, {});
+    const settings = await getCachedData(CACHE_KEYS.BANK_SETTINGS, async () => {
+      const result = await query("SELECT key, value FROM system_settings WHERE key LIKE 'bank_%'");
+      
+      // Convert array of rows [{key: 'x', value: 'y'}] into a single object { x: 'y' }
+      return result.rows.reduce((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+      }, {});
+    }, 86400); // 24 hours (rarely changes)
 
     res.json(settings);
   } catch (err) {
@@ -32,6 +39,10 @@ export const updateBankDetails = async (req, res) => {
     });
 
     await Promise.all(promises);
+
+    // Invalidate settings cache
+    await invalidateCache(CACHE_KEYS.BANK_SETTINGS);
+
     res.json({ message: 'Bank details updated successfully' });
   } catch (err) {
     console.error('Error updating settings:', err);

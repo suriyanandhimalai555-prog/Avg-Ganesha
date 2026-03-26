@@ -3,42 +3,40 @@
  */
 import { query } from '../../shared/db.js';
 import { uploadToS3 } from '../../shared/s3.js';
+import { getCachedData, invalidateCache } from '../../shared/redis.js';
 
-let cachedCategories = null;
-let cachedCategoriesTime = 0;
+const CACHE_KEYS = {
+  CATEGORIES: 'donations:categories',
+  GLOBAL_STATUE_COUNT: 'donations:global_statue_count',
+  ADMIN_STATS: 'admin:stats'
+};
+
 
 // --- Get all categories (public) ---
 export const getCategories = async (req, res) => {
   try {
-    const now = Date.now();
-    // 5-minute memory cache
-    if (cachedCategories && now - cachedCategoriesTime < 5 * 60 * 1000) {
-      return res.json(cachedCategories);
-    }
+    const categories = await getCachedData(CACHE_KEYS.CATEGORIES, async () => {
+      const catResult = await query(
+        `SELECT c.id, c.slug, c.name, c.has_fixed_price, c.display_order
+         FROM donation_categories c
+         WHERE c.is_active = true
+         ORDER BY c.display_order ASC`
+      );
 
-    const catResult = await query(
-      `SELECT c.id, c.slug, c.name, c.has_fixed_price, c.display_order
-       FROM donation_categories c
-       WHERE c.is_active = true
-       ORDER BY c.display_order ASC`
-    );
+      const priceResult = await query(
+        `SELECT key, value FROM system_settings WHERE key IN ('statue_1_5_ft_price', 'statue_250_ft_price')`
+      );
+      const prices = Object.fromEntries(priceResult.rows.map((r) => [r.key.replace('_price', ''), parseFloat(r.value) || null]));
 
-    const priceResult = await query(
-      `SELECT key, value FROM system_settings WHERE key IN ('statue_1_5_ft_price', 'statue_250_ft_price')`
-    );
-    const prices = Object.fromEntries(priceResult.rows.map((r) => [r.key.replace('_price', ''), parseFloat(r.value) || null]));
-
-    const categories = catResult.rows.map((c) => ({
-      id: c.id,
-      slug: c.slug,
-      name: c.name,
-      hasFixedPrice: c.has_fixed_price,
-      fixedPrice: c.has_fixed_price && prices[c.slug] ? prices[c.slug] : null,
-      displayOrder: c.display_order,
-    }));
-
-    cachedCategories = categories;
-    cachedCategoriesTime = now;
+      return catResult.rows.map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        name: c.name,
+        hasFixedPrice: c.has_fixed_price,
+        fixedPrice: c.has_fixed_price && prices[c.slug] ? prices[c.slug] : null,
+        displayOrder: c.display_order,
+      }));
+    }, 3600); // 1 hour cache
 
     res.json(categories);
   } catch (err) {
@@ -121,6 +119,9 @@ export const submitDonation = async (req, res) => {
       );
     }
 
+    // Invalidate admin stats cache (new pending donation)
+    await invalidateCache(CACHE_KEYS.ADMIN_STATS);
+
     res.status(201).json({
       message: 'Donation submitted successfully',
       donation: result.rows[0],
@@ -176,11 +177,14 @@ export const getMyDonationStats = async (req, res) => {
          AND category_id = (SELECT id FROM donation_categories WHERE slug = 'statue_1_5_ft' LIMIT 1)`,
         [userId]
       ),
-      query(
-        `SELECT COUNT(*) as count FROM donations
-         WHERE status = 'CONFIRMED'
-         AND category_id = (SELECT id FROM donation_categories WHERE slug = 'statue_1_5_ft' LIMIT 1)`
-      ),
+      getCachedData(CACHE_KEYS.GLOBAL_STATUE_COUNT, async () => {
+        const res = await query(
+          `SELECT COUNT(*) as count FROM donations
+           WHERE status = 'CONFIRMED'
+           AND category_id = (SELECT id FROM donation_categories WHERE slug = 'statue_1_5_ft' LIMIT 1)`
+        );
+        return parseInt(res.rows[0].count);
+      }, 300), // 5 minute cache
       query(
         `SELECT DISTINCT statue_number FROM donations
          WHERE user_id = $1 AND status = 'CONFIRMED' AND statue_number IS NOT NULL
@@ -197,7 +201,7 @@ export const getMyDonationStats = async (req, res) => {
         total: parseFloat(r.total),
       })),
       statue15FtCount: parseInt(statue15Count.rows[0]?.count || 0),
-      globalStatue15FtFunded: parseInt(globalStatue15Count.rows[0]?.count || 0),
+      globalStatue15FtFunded: globalStatue15Count,
       myStatueNumbers: myStatueNumbers.rows.map(r => r.statue_number),
     });
   } catch (err) {
@@ -289,6 +293,13 @@ export const reviewDonation = async (req, res) => {
     if (updateResult.rows.length === 0) {
       return res.status(404).json({ error: 'Donation not found or already reviewed' });
     }
+
+    // Invalidate relevant caches
+    await Promise.all([
+      invalidateCache(CACHE_KEYS.GLOBAL_STATUE_COUNT),
+      invalidateCache(CACHE_KEYS.ADMIN_STATS)
+    ]);
+
     res.json({ message: `Donation ${status.toLowerCase()}` });
   } catch (err) {
     console.error('Review donation error:', err);

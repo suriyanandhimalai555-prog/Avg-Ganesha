@@ -1,4 +1,9 @@
 import { query } from '../../shared/db.js';
+import { getCachedData, invalidateCache } from '../../shared/redis.js';
+
+const CACHE_KEYS = {
+  ADMIN_STATS: 'admin:stats'
+};
 import { getS3SignedUrl } from '../../shared/s3.js';
 
 function toRelativeUploadPath(fullPath) {
@@ -20,21 +25,25 @@ function toRelativeUploadPath(fullPath) {
 // --- 1. Get System-Wide Stats ---
 export const getAdminStats = async (req, res) => {
   try {
-    const [totalRes, submittedRes, approvedRes, invitedRes, pendingDonationsRes] = await Promise.all([
-      query('SELECT COUNT(*) FROM users'),
-      query("SELECT COUNT(*) FROM users WHERE kyc_status = 'SUBMITTED'"),
-      query("SELECT COUNT(*) FROM users WHERE kyc_status = 'APPROVED'"),
-      query('SELECT COUNT(*) FROM users WHERE invited_by IS NOT NULL'),
-      query("SELECT COUNT(*) FROM donations WHERE status = 'PENDING'")
-    ]);
+    const stats = await getCachedData(CACHE_KEYS.ADMIN_STATS, async () => {
+      const [totalRes, submittedRes, approvedRes, invitedRes, pendingDonationsRes] = await Promise.all([
+        query('SELECT COUNT(*) FROM users'),
+        query("SELECT COUNT(*) FROM users WHERE kyc_status = 'SUBMITTED'"),
+        query("SELECT COUNT(*) FROM users WHERE kyc_status = 'APPROVED'"),
+        query('SELECT COUNT(*) FROM users WHERE invited_by IS NOT NULL'),
+        query("SELECT COUNT(*) FROM donations WHERE status = 'PENDING'")
+      ]);
 
-    res.json({
-      totalUsers: parseInt(totalRes.rows[0].count),
-      submittedKYC: parseInt(submittedRes.rows[0].count),
-      approvedKYC: parseInt(approvedRes.rows[0].count),
-      totalInvited: parseInt(invitedRes.rows[0].count),
-      pendingDonations: parseInt(pendingDonationsRes.rows[0].count),
-    });
+      return {
+        totalUsers: parseInt(totalRes.rows[0].count),
+        submittedKYC: parseInt(submittedRes.rows[0].count),
+        approvedKYC: parseInt(approvedRes.rows[0].count),
+        totalInvited: parseInt(invitedRes.rows[0].count),
+        pendingDonations: parseInt(pendingDonationsRes.rows[0].count),
+      };
+    }, 60); // 1 minute cache
+
+    res.json(stats);
   } catch (err) {
     console.error('Admin Stats Error:', err);
     res.status(500).json({ error: 'Failed to fetch statistics' });
@@ -132,6 +141,10 @@ export const updateUserRole = async (req, res) => {
 
   try {
     await query('UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2', [role, userId]);
+    
+    // Invalidate admin stats cache
+    await invalidateCache(CACHE_KEYS.ADMIN_STATS);
+    
     res.json({ message: `User role updated to ${role}` });
   } catch (err) {
     console.error('Update Role Error:', err);
@@ -152,6 +165,10 @@ export const adminReviewKYC = async (req, res) => {
       'UPDATE users SET kyc_status = $1, kyc_rejection_reason = $2, updated_at = NOW() WHERE id = $3',
       [status, status === 'REJECTED' ? rejectionReason || null : null, userId]
     );
+
+    // Invalidate admin stats cache
+    await invalidateCache(CACHE_KEYS.ADMIN_STATS);
+
     res.json({ message: `User KYC has been ${status}` });
   } catch (err) {
     console.error('KYC Review Error:', err);

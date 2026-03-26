@@ -11,6 +11,8 @@ import morgan from 'morgan';
 import compression from 'compression';
 import { rateLimitConfig, corsConfig } from './config/index.js';
 import { pool } from './shared/db.js';
+import { RedisStore } from 'rate-limit-redis';
+import redisClient from './shared/redis.js';
 
 // Routes
 import authRoutes from './modules/auth/auth.routes.js';
@@ -49,10 +51,18 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 // 3. RATE LIMITING
 const apiLimiter = rateLimit({
   ...rateLimitConfig.api,
+  store: new RedisStore({
+    sendCommand: (...args) => redisClient.sendCommand(args),
+    prefix: 'rl:api:',
+  }),
   message: 'Too many requests from this IP, please try again later.',
 });
 const authLimiter = rateLimit({
   ...rateLimitConfig.auth,
+  store: new RedisStore({
+    sendCommand: (...args) => redisClient.sendCommand(args),
+    prefix: 'rl:auth:',
+  }),
   message: 'Too many auth attempts. Please try again later.',
 });
 app.use('/api/', apiLimiter);

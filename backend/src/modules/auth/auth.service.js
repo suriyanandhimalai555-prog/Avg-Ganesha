@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../../shared/db.js';
 import { authConfig } from '../../config/index.js';
 import { AUTH_ERRORS, INVITE_PREFIX, INVITE_CODE_LENGTH } from '../../config/constants.js';
+import { invalidateCache } from '../../shared/redis.js';
 
 function generateInviteCode() {
   return INVITE_PREFIX + Math.random().toString(36).substring(2, 2 + INVITE_CODE_LENGTH).toUpperCase();
@@ -64,6 +65,9 @@ export async function registerUser({ email, password, fullName, phone, inviteCod
     }
 
     await client.query('COMMIT');
+
+    // Invalidate admin stats cache
+    await invalidateCache('admin:stats');
 
     const token = signToken({ id: newUser.id, role: newUser.role });
     const user = toUserDto(newUser);
