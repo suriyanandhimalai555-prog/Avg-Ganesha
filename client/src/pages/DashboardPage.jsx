@@ -6,9 +6,13 @@ import { royalDashboardStyles } from '../styles/index.styles';
 import LoadingScreen from '../components/LoadingScreen';
 import {
   AVG_COIN_USD_PRICE,
+  AVG_COIN_INR_PRICE,
   avgToUsd,
+  avgToInr,
   formatUsd,
   formatUsdRate,
+  formatInr,
+  formatInrRate,
 } from '../config/coins';
 
 // Pick a font-size class for the MEMBER NAME card so long names don't overflow the card.
@@ -229,6 +233,9 @@ const DashboardPage = () => {
                   <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-bold tabular-nums tracking-tight">
                     {formatUsdRate(AVG_COIN_USD_PRICE)} / AVG
                   </span>
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-300 text-[9px] font-bold tabular-nums tracking-tight">
+                    {formatInrRate(AVG_COIN_INR_PRICE)} / AVG
+                  </span>
                 </div>
                 <h3 className="text-3xl md:text-4xl font-sans font-bold text-white tabular-nums tracking-tight leading-none">
                   {Number(coins.totalBalance).toLocaleString('en-IN')}{' '}
@@ -240,6 +247,11 @@ const DashboardPage = () => {
                   <span className="text-white/30 mr-1">≈</span>
                   {formatUsd(avgToUsd(coins.totalBalance))}
                   <span className="text-white/30 text-[10px] font-bold tracking-widest uppercase ml-1.5">USD</span>
+                </p>
+                <p className="text-xs md:text-sm font-sans font-medium text-orange-300/80 tabular-nums tracking-tight mt-0.5">
+                  <span className="text-orange-300/40 mr-1">≈</span>
+                  {formatInr(avgToInr(coins.totalBalance))}
+                  <span className="text-orange-300/40 text-[10px] font-bold tracking-widest uppercase ml-1.5">INR</span>
                 </p>
               </div>
             </div>
