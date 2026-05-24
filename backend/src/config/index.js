@@ -3,13 +3,26 @@
  * Makes the app easier to edit and test (inject config for tests).
  */
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Refuse to boot in production with a missing/placeholder JWT_SECRET — anyone with
+// the placeholder string can forge tokens.
+const JWT_PLACEHOLDER = 'change_this_to_a_long_random_secret';
+const jwtSecret = process.env.JWT_SECRET || '';
+if (isProduction && (!jwtSecret || jwtSecret === JWT_PLACEHOLDER || jwtSecret.length < 32)) {
+  throw new Error(
+    'JWT_SECRET must be set to a strong (>=32 char) random value in production. ' +
+    'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"'
+  );
+}
+
 export const ROLES = Object.freeze({
   ADMIN: 'ADMIN',
   USER: 'USER',
 });
 
 export const authConfig = Object.freeze({
-  jwtSecret: process.env.JWT_SECRET || '',
+  jwtSecret,
   accessTokenExpiry: process.env.JWT_EXPIRY || '1d',
   bcryptRounds: 10,
 });

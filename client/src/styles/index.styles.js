@@ -12,7 +12,10 @@ export const commonStyles = {
 
   // Page Layouts
   pageContainer: "min-h-screen bg-[#060B28] font-sans text-white relative overflow-hidden",
-  mainContent: "max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8 relative z-10",
+  // For routes wrapped by DashboardLayout that need to vertically center their
+  // content (login, register, 404). Uses calc to fit inside the outlet area.
+  pageContainerCentered: "flex items-center justify-center w-full min-h-[calc(100vh-12rem)] md:min-h-[calc(100vh-14rem)] bg-transparent font-sans text-white relative px-4 py-6",
+  mainContent: "max-w-7xl mx-auto py-6 md:py-10 px-3 sm:px-6 lg:px-8 relative z-10",
 
   // Typography
   pageTitle: "text-3xl md:text-5xl font-serif text-white font-bold mb-3 tracking-wide uppercase drop-shadow-[0_0_10px_rgba(251,191,36,0.3)]",
@@ -42,8 +45,8 @@ export const commonStyles = {
   paginationBtn: "text-[10px] font-black text-[#FBDB8C] disabled:opacity-20 uppercase tracking-[0.2em] hover:bg-white/5 px-4 py-2 rounded-lg transition-all",
   paginationText: "text-[10px] font-black text-[#FBDB8C]/60 bg-white/5 px-4 py-2 rounded-full border border-white/10 shadow-sm uppercase tracking-widest",
   tableRow: "hover:bg-white/5 transition-all group",
-  tableCell: "px-8 py-6 whitespace-nowrap text-white/60 text-sm",
-  tableHeaderCell: "px-8 py-6 text-left text-[9px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em] bg-black/10",
+  tableCell: "px-4 md:px-8 py-4 md:py-6 whitespace-nowrap text-white/60 text-sm",
+  tableHeaderCell: "px-4 md:px-8 py-4 md:py-6 text-left text-[9px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em] bg-black/10",
 
   // Modals
   modalOverlay: "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in",
@@ -97,26 +100,26 @@ export const sidebarStyles = {
 export const adminStyles = {
   // Navbar
   navbar: "bg-[#060B28] border-b border-[#FBDB8C]/20 sticky top-0 z-20 shadow-xl backdrop-blur-md",
-  navbarInner: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
-  navbarContent: "flex items-center justify-between h-24",
-  navbarLogoWrapper: "p-3 bg-[#FBDB8C]/10 rounded-2xl text-[#FBDB8C] border border-[#FBDB8C]/20 shadow-[0_0_15px_rgba(251,219,140,0.1)]",
-  navbarTitle: "text-lg md:text-xl font-serif font-black text-white tracking-[0.1em] uppercase",
-  logoutBtn: "flex items-center gap-2 px-6 py-2.5 text-xs font-black text-[#FBDB8C] hover:bg-white/5 border border-[#FBDB8C]/20 rounded-full transition-all uppercase tracking-widest",
+  navbarInner: "max-w-7xl mx-auto px-3 sm:px-6 lg:px-8",
+  navbarContent: "flex items-center justify-between gap-3 h-16 md:h-24",
+  navbarLogoWrapper: "p-2 md:p-3 bg-[#FBDB8C]/10 rounded-xl md:rounded-2xl text-[#FBDB8C] border border-[#FBDB8C]/20 shadow-[0_0_15px_rgba(251,219,140,0.1)] flex-shrink-0",
+  navbarTitle: "text-sm md:text-xl font-serif font-bold text-white tracking-[0.05em] md:tracking-[0.1em] uppercase truncate",
+  logoutBtn: "flex items-center gap-2 px-3 py-2 md:px-6 md:py-2.5 text-[10px] md:text-xs font-black text-[#FBDB8C] hover:bg-white/5 border border-[#FBDB8C]/20 rounded-full transition-all uppercase tracking-widest flex-shrink-0",
   
   // Stats
-  statCardBase: "bg-gradient-to-b from-[#0A194E] to-[#040924] border border-[#FBDB8C]/20 rounded-3xl p-6 relative overflow-hidden group cursor-pointer transition-all hover:shadow-[0_0_30px_rgba(251,219,140,0.1)] hover:-translate-y-1",
+  statCardBase: "bg-gradient-to-b from-[#0A194E] to-[#040924] border border-[#FBDB8C]/20 rounded-2xl md:rounded-3xl p-4 md:p-6 relative overflow-hidden group cursor-pointer transition-all hover:shadow-[0_0_30px_rgba(251,219,140,0.1)] hover:-translate-y-1",
   statCardActive: "ring-2 ring-[#FBDB8C] border-transparent shadow-lg",
   statCardInactive: "hover:border-[#FBDB8C]/40",
   statCardDecoration: "absolute top-0 left-0 w-[1px] h-full bg-[#FBDB8C] opacity-30",
-  statCardLabel: "text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.3em] mb-3",
-  statCardValue: "text-3xl font-serif font-black text-white tracking-widest",
-  statCardValueAmber: "text-3xl font-serif font-black text-[#FBDB8C] tracking-widest drop-shadow-[0_0_8px_rgba(251,219,140,0.3)]",
-  statCardIconWrapper: "absolute top-6 right-6 p-4 rounded-2xl bg-white/5 text-[#FBDB8C] transition-all group-hover:bg-[#FBDB8C]/10",
+  statCardLabel: "text-[9px] md:text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em] md:tracking-[0.3em] mb-2 md:mb-3",
+  statCardValue: "text-3xl md:text-4xl font-sans font-bold text-white tabular-nums tracking-tight leading-none",
+  statCardValueAmber: "text-3xl md:text-4xl font-sans font-bold text-[#FBDB8C] tabular-nums tracking-tight leading-none drop-shadow-[0_0_8px_rgba(251,219,140,0.3)]",
+  statCardIconWrapper: "absolute top-3 right-3 md:top-6 md:right-6 p-2.5 md:p-4 rounded-xl md:rounded-2xl bg-white/5 text-[#FBDB8C] transition-all group-hover:bg-[#FBDB8C]/10",
   
   // Sections
   sectionBox: "bg-white/5 border border-[#FBDB8C]/10 rounded-[2rem] p-10 mb-12 shadow-inner backdrop-blur-md",
-  donationStatBox: "bg-gradient-to-br from-[#0A194E] to-[#040924] border border-[#FBDB8C]/20 rounded-3xl p-6 flex justify-between items-center shadow-lg hover:border-[#FBDB8C]/40 transition-all",
-  donationStatIcon: "w-12 h-12 rounded-2xl bg-[#FBDB8C]/10 text-[#FBDB8C] flex items-center justify-center shadow-[0_0_15px_rgba(251,219,140,0.2)]",
+  donationStatBox: "bg-gradient-to-br from-[#0A194E] to-[#040924] border border-[#FBDB8C]/20 rounded-2xl md:rounded-3xl p-4 md:p-6 flex justify-between items-center shadow-lg hover:border-[#FBDB8C]/40 transition-all",
+  donationStatIcon: "w-9 h-9 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-[#FBDB8C]/10 text-[#FBDB8C] flex items-center justify-center shadow-[0_0_15px_rgba(251,219,140,0.2)] flex-shrink-0",
   
   // Status Badges
   statusBadgeBase: "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border backdrop-blur-sm",
@@ -238,13 +241,15 @@ export const donateStyles = {
 
   // Category Cards
   categoryCard: "bg-gradient-to-b from-[#0A194E] to-[#040924] rounded-2xl border border-[#FBDB8C]/10 shadow-lg transition-all hover:shadow-[0_0_30px_rgba(251,219,140,0.1)] hover:-translate-y-1 hover:border-[#FBDB8C]/40 flex flex-col relative overflow-hidden group",
-  categoryImageWrapper: "relative h-48 overflow-hidden",
+  categoryImageWrapper: "relative h-44 md:h-48 overflow-hidden",
   categoryImage: "w-full h-full object-cover transition-transform duration-700 group-hover:scale-110",
-  categoryImageOverlay: "absolute inset-0 bg-transparent",
-  categoryContent: "p-8 flex-1 flex flex-col relative z-10",
-  categoryTitle: "text-lg font-serif text-white font-bold tracking-wide uppercase",
-  fixedPrice: "text-[#FBDB8C] font-black text-2xl mt-4 tracking-tighter drop-shadow-[0_0_8px_rgba(251,191,36,0.2)]",
-  amountLabel: "text-[#FBDB8C]/40 text-[10px] font-bold uppercase tracking-[0.2em] mt-2",
+  categoryImageOverlay: "absolute inset-0 bg-gradient-to-t from-[#040924] via-transparent to-transparent opacity-70",
+  categoryContent: "p-6 md:p-7 flex-1 flex flex-col relative z-10",
+  // Scheme/category title — sans for clean rendering of mixed digits + words
+  categoryTitle: "text-base md:text-lg font-sans font-semibold text-white tracking-[0.04em] leading-snug min-h-[3rem] line-clamp-2",
+  // Fixed price — sans + tabular for clean numerals
+  fixedPrice: "text-[#FBDB8C] font-sans font-semibold text-2xl mt-3 tabular-nums tracking-tight drop-shadow-[0_0_8px_rgba(251,191,36,0.15)]",
+  amountLabel: "text-[#FBDB8C]/50 text-[10px] font-bold uppercase tracking-[0.2em] mt-3",
 
   // Donation Modal
   modalOverlay: "fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in",
@@ -399,7 +404,12 @@ export const royalDashboardStyles = {
 
   cardIcon: "w-10 h-10 mb-3 text-[#FBDB8C] drop-shadow-[0_0_8px_rgba(251,219,140,0.4)]",
   cardLabel: "text-[10px] font-bold text-[#FBDB8C]/60 uppercase tracking-[0.2em] mb-2",
-  cardValue: "text-2xl font-serif font-bold text-white tracking-widest uppercase truncate w-full px-4 text-center",
+  // For text values (e.g. KYC status) — kept as serif since it's a word
+  cardValue: "text-xl md:text-2xl font-serif font-bold text-white tracking-widest uppercase truncate w-full px-4 text-center",
+  // Numeric values (₹ amounts, statue #) — sans + tabular + white for consistency
+  cardValueNumber: "text-2xl md:text-3xl font-sans font-semibold text-white tabular-nums tracking-tight w-full px-2 text-center leading-none",
+  // Name variant: allow wrapping (long names) — size class is chosen by the consumer (`nameSizeClass` helper)
+  cardValueName: "font-serif font-bold text-white tracking-wide uppercase w-full px-3 text-center break-words leading-tight line-clamp-2",
 
   // Status Badge (Large)
   statusBadge: "relative w-48 h-48 md:w-56 md:h-56 flex flex-col items-center justify-center mx-auto",

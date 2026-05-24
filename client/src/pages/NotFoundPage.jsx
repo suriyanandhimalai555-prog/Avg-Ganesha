@@ -1,12 +1,11 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { royalDashboardStyles } from '../styles/index.styles';
+import { commonStyles } from '../styles/index.styles';
 
 const NotFoundPage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[#060B28] flex flex-col items-center justify-center px-4 text-center overflow-hidden">
+    <div className={commonStyles.pageContainerCentered + ' flex-col text-center'}>
       <div className="relative mb-20 animate-float">
         <div className="absolute inset-0 bg-[#FBDB8C]/20 blur-3xl rounded-full scale-150 transform -translate-y-4" />
         <img src="/Ganesha.jpeg" alt="Ganesha" className="relative z-10 w-48 h-48 rounded-full object-cover shadow-[0_0_50px_rgba(251,219,140,0.3)] border-4 border-[#FBDB8C]/20" />

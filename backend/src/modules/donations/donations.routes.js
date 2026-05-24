@@ -10,6 +10,7 @@ import {
   getMyDonationStats,
   getPendingDonations,
   reviewDonation,
+  getMyCoins,
 } from './donations.controller.js';
 import { authenticateToken, authorizeRole } from '../../middleware/authMiddleware.js';
 
@@ -57,6 +58,7 @@ router.post(
 
 router.get('/my', authenticateToken, getMyDonations);
 router.get('/my-stats', authenticateToken, getMyDonationStats);
+router.get('/my-coins', authenticateToken, getMyCoins);
 
 router.get('/admin/pending', authenticateToken, authorizeRole('ADMIN'), getPendingDonations);
 router.post('/admin/review/:donationId', authenticateToken, authorizeRole('ADMIN'), reviewDonation);

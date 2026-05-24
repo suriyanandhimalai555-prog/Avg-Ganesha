@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { commonStyles, plansStyles } from '../styles/index.styles';
+import LoadingScreen from '../components/LoadingScreen';
 
 const PlansPage = () => {
   const [plans, setPlans] = useState([]);
@@ -67,14 +68,7 @@ const PlansPage = () => {
     fetchPlans();
   }, []);
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#060B28] flex items-center justify-center overflow-y-auto">
-      <div className="flex flex-col items-center gap-4">
-        <img src="/Ganesha.jpeg" alt="Loading" className="w-16 h-16 rounded-full animate-pulse border-2 border-[#FBDB8C]/30" />
-        <p className="text-[#FBDB8C] font-serif tracking-[0.2em] animate-pulse uppercase">REVEALING SEVA PATHS...</p>
-      </div>
-    </div>
-  );
+  if (loading) return <LoadingScreen message="Revealing Seva Paths..." />;
 
   return (
     <div className={commonStyles.pageContainer + " pt-4 pb-20 px-4 overflow-y-auto"}>

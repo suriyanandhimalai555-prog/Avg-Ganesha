@@ -6,7 +6,17 @@ dotenv.config();
 
 const { Pool } = pg;
 
+// SSL is required by managed PG providers (Railway, Supabase, Heroku, etc.) and by
+// any production deployment. Default it on in production unless explicitly disabled.
+const shouldUseSsl = () => {
+  if (process.env.DB_SSL === 'true') return true;
+  if (process.env.DB_SSL === 'false') return false;
+  return process.env.NODE_ENV === 'production';
+};
+
 const getDbConfig = () => {
+  const ssl = shouldUseSsl() ? { rejectUnauthorized: false } : false;
+
   // Option 1: Use DATABASE_URL
   if (process.env.DATABASE_URL) {
     try {
@@ -17,7 +27,7 @@ const getDbConfig = () => {
         host: params.hostname,
         port: params.port,
         database: params.pathname.split('/')[1],
-        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+        ssl,
         max: parseInt(process.env.DB_POOL_MAX) || 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
@@ -35,7 +45,7 @@ const getDbConfig = () => {
       host: process.env.DB_HOST,
       port: parseInt(process.env.DB_PORT) || 5432,
       database: process.env.DB_NAME,
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      ssl,
       max: parseInt(process.env.DB_POOL_MAX) || 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,

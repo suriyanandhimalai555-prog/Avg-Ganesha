@@ -18,8 +18,9 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        serif: ['Georgia', 'serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        serif: ['"Cormorant Garamond"', 'Georgia', 'ui-serif', 'serif'],
+        display: ['"Cormorant Garamond"', 'Georgia', 'serif'],
       },
       backgroundImage: {
         'teal-gradient': 'linear-gradient(135deg, #2D9C8A 0%, #1A7566 100%)',

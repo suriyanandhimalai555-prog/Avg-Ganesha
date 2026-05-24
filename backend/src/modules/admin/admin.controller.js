@@ -1,5 +1,6 @@
 import { query } from '../../shared/db.js';
 import { getCachedData, invalidateCache } from '../../shared/redis.js';
+import { invalidateAuthUser } from '../../middleware/authMiddleware.js';
 
 const CACHE_KEYS = {
   ADMIN_STATS: 'admin:stats'
@@ -141,10 +142,13 @@ export const updateUserRole = async (req, res) => {
 
   try {
     await query('UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2', [role, userId]);
-    
-    // Invalidate admin stats cache
-    await invalidateCache(CACHE_KEYS.ADMIN_STATS);
-    
+
+    // Invalidate caches: admin stats + this user's cached auth profile
+    await Promise.all([
+      invalidateCache(CACHE_KEYS.ADMIN_STATS),
+      invalidateAuthUser(userId),
+    ]);
+
     res.json({ message: `User role updated to ${role}` });
   } catch (err) {
     console.error('Update Role Error:', err);
@@ -201,9 +205,9 @@ export const updateUserDetails = async (req, res) => {
     }
 
     const updateRes = await query(
-      `UPDATE users 
-       SET email = $1, phone_number = $2, updated_at = NOW() 
-       WHERE id = $3 
+      `UPDATE users
+       SET email = $1, phone_number = $2, updated_at = NOW()
+       WHERE id = $3
        RETURNING id, full_name, email, phone_number`,
       [email, phone_number || null, userId]
     );
@@ -212,7 +216,10 @@ export const updateUserDetails = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ 
+    // Email is part of the cached auth profile — invalidate so next request reloads it
+    await invalidateAuthUser(userId);
+
+    res.json({
       message: 'User details updated successfully',
       user: updateRes.rows[0]
     });

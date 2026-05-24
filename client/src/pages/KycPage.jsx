@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Upload, CheckCircle, AlertCircle, Shield, FileText } from 'lucide-react';
 import api from '../api/axios';
 import { kycStyles } from '../styles/index.styles';
+import LoadingScreen from '../components/LoadingScreen';
 
 const KycPage = () => {
   const [fileFront, setFileFront] = useState(null);
@@ -81,14 +82,7 @@ const KycPage = () => {
   );
 
   if (status === 'LOADING') {
-    return (
-      <div className="min-h-screen bg-[#060B28] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <img src="/Ganesha.jpeg" alt="Loading" className="w-16 h-16 rounded-full animate-pulse border-2 border-[#FBDB8C]/30" />
-          <p className="text-[#FBDB8C] font-serif tracking-[0.2em] animate-pulse uppercase">READING DEVOTEE STATUS...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="Reading Devotee Status..." />;
   }
 
   return (

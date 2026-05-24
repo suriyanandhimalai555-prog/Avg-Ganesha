@@ -99,15 +99,10 @@ export async function getS3SignedUrl(s3Uri, expiresInSeconds = 3600) {
       }
     }
 
-    console.log(`[S3 Debug] Signing for Bucket: ${bucket}, Key: ${key}`);
-
     const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-    const url = await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
-    
-    console.log(`[S3 Debug] Generated Signed URL: ${url.substring(0, 100)}...`);
-    return url;
+    return await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
   } catch (err) {
-    console.error('[S3 Debug] Error parsing/signing URL:', err);
+    console.error('S3 signed URL error:', err.message);
     throw err;
   }
 }

@@ -6,7 +6,10 @@ import { onSessionExpired } from './lib/authEvents';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
-import AdminPage from './pages/AdminPage';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDevotees from './pages/admin/AdminDevotees';
+import AdminSeva from './pages/admin/AdminSeva';
+import AdminSettings from './pages/admin/AdminSettings';
 import DashboardLayout from './components/DashboardLayout';
 import PlansPage from './pages/PlansPage';
 import NetworkPage from './pages/NetworkPage';
@@ -47,15 +50,20 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* Admin routes: no user dashboard layout/sidebar */}
+      {/* Admin routes: own layout with stats + tabbed subpages */}
       <Route
         path="/admin"
         element={
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <AdminPage />
+            <AdminLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<Navigate to="devotees" replace />} />
+        <Route path="devotees" element={<AdminDevotees />} />
+        <Route path="seva" element={<AdminSeva />} />
+        <Route path="settings" element={<AdminSettings />} />
+      </Route>
 
       {/* Global Layout Wrapper for devotee portal */}
       <Route element={<DashboardLayout />}>

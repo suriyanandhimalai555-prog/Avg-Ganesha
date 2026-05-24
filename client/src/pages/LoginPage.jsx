@@ -46,7 +46,7 @@ const LoginPage = () => {
   if (token && user) return null;
 
   return (
-    <div className={commonStyles.pageContainer + " flex items-center justify-center p-4 relative overflow-hidden"}>
+    <div className={commonStyles.pageContainerCentered}>
       <div className={authStyles.authCard}>
         
         {/* Decorative top line */}

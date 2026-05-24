@@ -1,27 +1,79 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { User, CircleDollarSign, Shapes, ShieldCheck, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { User, CircleDollarSign, Shapes, ShieldCheck, CheckCircle, Clock, XCircle, Coins } from 'lucide-react';
 import api from '../api/axios';
 import { royalDashboardStyles } from '../styles/index.styles';
+import LoadingScreen from '../components/LoadingScreen';
+import {
+  AVG_COIN_USD_PRICE,
+  avgToUsd,
+  formatUsd,
+  formatUsdRate,
+} from '../config/coins';
+
+// Pick a font-size class for the MEMBER NAME card so long names don't overflow the card.
+const nameSizeClass = (name) => {
+  const len = (name || '').trim().length;
+  if (len <= 12) return 'text-2xl';
+  if (len <= 18) return 'text-xl';
+  if (len <= 26) return 'text-lg';
+  return 'text-base';
+};
+
+// Live countdown to a target Date. Returns y/d/h/m/s remaining (or all zeros once unlocked).
+const useCountdown = (targetDate) => {
+  const compute = () => {
+    if (!targetDate) return null;
+    const now = Date.now();
+    const target = new Date(targetDate).getTime();
+    let diff = Math.max(0, target - now);
+    const years = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+    diff -= years * 365.25 * 24 * 3600 * 1000;
+    const days = Math.floor(diff / (24 * 3600 * 1000));
+    diff -= days * 24 * 3600 * 1000;
+    const hours = Math.floor(diff / (3600 * 1000));
+    diff -= hours * 3600 * 1000;
+    const minutes = Math.floor(diff / (60 * 1000));
+    diff -= minutes * 60 * 1000;
+    const seconds = Math.floor(diff / 1000);
+    const unlocked = new Date(targetDate).getTime() <= now;
+    return { years, days, hours, minutes, seconds, unlocked };
+  };
+
+  const [remaining, setRemaining] = useState(compute);
+
+  useEffect(() => {
+    if (!targetDate) return;
+    setRemaining(compute());
+    const id = setInterval(() => setRemaining(compute()), 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetDate]);
+
+  return remaining;
+};
 
 const DashboardPage = () => {
   const { user } = useSelector((state) => state.auth);
   const [stats, setStats] = useState(null);
   const [kycStatus, setKycStatus] = useState(null);
   const [myDonations, setMyDonations] = useState([]);
+  const [coins, setCoins] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, kycRes, donationsRes] = await Promise.all([
+        const [statsRes, kycRes, donationsRes, coinsRes] = await Promise.all([
           api.get('/api/donations/my-stats'),
           api.get('/api/kyc/status').catch(() => ({ data: { status: 'PENDING' } })),
           api.get('/api/donations/my').catch(() => ({ data: [] })),
+          api.get('/api/donations/my-coins').catch(() => ({ data: null })),
         ]);
         setStats(statsRes.data);
         setKycStatus(kycRes.data.status);
         setMyDonations(Array.isArray(donationsRes.data) ? donationsRes.data : []);
+        setCoins(coinsRes.data);
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);
       } finally {
@@ -31,15 +83,10 @@ const DashboardPage = () => {
     fetchData();
   }, []);
 
+  const coinCountdown = useCountdown(coins?.nextUnlockAt);
+
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#060B28] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <img src="/Ganesha.jpeg" alt="Loading" className="w-16 h-16 rounded-full animate-pulse border-2 border-[#FBDB8C]/30" />
-          <p className="text-[#FBDB8C] font-serif tracking-[0.2em] animate-pulse">REVEALING ROYAL PORTAL...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="Revealing Royal Portal..." />;
   }
 
   const statueNumbers = stats?.myStatueNumbers || [];
@@ -111,7 +158,12 @@ const DashboardPage = () => {
           <div className={royalDashboardStyles.cardGlowTop} />
           <User className={royalDashboardStyles.cardIcon} />
           <p className={royalDashboardStyles.cardLabel}>MEMBER NAME:</p>
-          <h3 className={royalDashboardStyles.cardValue}>{user?.fullName || 'DEVOTEE'}</h3>
+          <h3
+            className={`${royalDashboardStyles.cardValueName} ${nameSizeClass(user?.fullName)}`}
+            title={user?.fullName || 'DEVOTEE'}
+          >
+            {user?.fullName || 'DEVOTEE'}
+          </h3>
           <div className={royalDashboardStyles.cardGlowBottom} />
         </div>
 
@@ -120,7 +172,10 @@ const DashboardPage = () => {
           <div className={royalDashboardStyles.cardGlowTop} />
           <CircleDollarSign className={royalDashboardStyles.cardIcon} />
           <p className={royalDashboardStyles.cardLabel}>TOTAL DONATE AMOUNT:</p>
-          <h3 className={royalDashboardStyles.cardValue}>₹{Number(totalDonated).toLocaleString('en-IN')}</h3>
+          <h3 className={royalDashboardStyles.cardValueNumber}>
+            <span className="text-white/50 mr-0.5 font-normal">₹</span>
+            {Number(totalDonated).toLocaleString('en-IN')}
+          </h3>
           <div className={royalDashboardStyles.cardGlowBottom} />
         </div>
 
@@ -129,8 +184,15 @@ const DashboardPage = () => {
           <div className={royalDashboardStyles.cardGlowTop} />
           <Shapes className={royalDashboardStyles.cardIcon} />
           <p className={royalDashboardStyles.cardLabel}>STATUE NUMBER:</p>
-          <h3 className={royalDashboardStyles.cardValue}>
-            {statueNumbers.length > 0 ? `#${statueNumbers[0]}` : '—'}
+          <h3 className={royalDashboardStyles.cardValueNumber}>
+            {statueNumbers.length > 0 ? (
+              <>
+                <span className="text-white/50 mr-0.5 font-normal">#</span>
+                {statueNumbers[0]}
+              </>
+            ) : (
+              <span className="text-white/30">—</span>
+            )}
           </h3>
           <div className={royalDashboardStyles.cardGlowBottom} />
         </div>
@@ -146,6 +208,81 @@ const DashboardPage = () => {
           <div className={royalDashboardStyles.cardGlowBottom} />
         </div>
       </div>
+
+      {/* AVG Coins reward + 5-year unlock timer */}
+      {coins && coins.totalBalance > 0 && (
+        <div className="mb-12 relative bg-gradient-to-br from-[#0A194E] via-[#0A194E]/80 to-[#040924] border border-[#FBDB8C]/30 rounded-2xl p-6 md:p-8 shadow-[0_0_40px_rgba(251,219,140,0.15)] overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#FBDB8C]/60 to-transparent" />
+          <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#FBDB8C]/5 blur-[100px] rounded-full pointer-events-none" />
+
+          <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="relative">
+                <div className="absolute inset-0 bg-[#FBDB8C]/20 blur-2xl rounded-full" />
+                <Coins className="relative w-14 h-14 text-[#FBDB8C] drop-shadow-[0_0_10px_rgba(251,219,140,0.6)]" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <p className="text-[10px] font-black text-[#FBDB8C]/60 uppercase tracking-[0.3em]">
+                    AVG Coins
+                  </p>
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-bold tabular-nums tracking-tight">
+                    {formatUsdRate(AVG_COIN_USD_PRICE)} / AVG
+                  </span>
+                </div>
+                <h3 className="text-3xl md:text-4xl font-sans font-bold text-white tabular-nums tracking-tight leading-none">
+                  {Number(coins.totalBalance).toLocaleString('en-IN')}{' '}
+                  <span className="text-sm md:text-base font-serif font-semibold text-[#FBDB8C]/70 tracking-widest uppercase ml-1">
+                    AVG
+                  </span>
+                </h3>
+                <p className="text-xs md:text-sm font-sans font-medium text-white/60 tabular-nums tracking-tight mt-1.5">
+                  <span className="text-white/30 mr-1">≈</span>
+                  {formatUsd(avgToUsd(coins.totalBalance))}
+                  <span className="text-white/30 text-[10px] font-bold tracking-widest uppercase ml-1.5">USD</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-start md:items-end gap-3">
+              <span className="text-[10px] font-black text-[#FBDB8C]/70 uppercase tracking-[0.3em]">
+                Unlocks In
+              </span>
+              {coinCountdown && !coinCountdown.unlocked ? (
+                <div className="flex items-stretch gap-2">
+                  {[
+                    { label: 'Years',   value: coinCountdown.years },
+                    { label: 'Days',    value: coinCountdown.days },
+                    { label: 'Hours',   value: coinCountdown.hours },
+                    { label: 'Minutes', value: coinCountdown.minutes },
+                    { label: 'Seconds', value: coinCountdown.seconds },
+                  ].map((seg, idx, arr) => (
+                    <div key={seg.label} className="flex items-stretch gap-2">
+                      <div className="flex flex-col items-center justify-center px-3 py-2 min-w-[56px] bg-black/30 border border-[#FBDB8C]/15 rounded-xl backdrop-blur-sm">
+                        <span className="text-xl md:text-2xl font-sans font-semibold text-white tabular-nums tracking-tight leading-none">
+                          {String(seg.value).padStart(2, '0')}
+                        </span>
+                        <span className="text-[8px] font-bold text-[#FBDB8C]/50 tracking-[0.15em] uppercase mt-1.5">
+                          {seg.label}
+                        </span>
+                      </div>
+                      {idx < arr.length - 1 && (
+                        <span className="self-center text-[#FBDB8C]/20 text-xl font-light leading-none">:</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-black uppercase tracking-[0.25em]">
+                  ● Available
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#FBDB8C]/60 to-transparent" />
+        </div>
+      )}
 
       {/* Main Content Box: Sacred Presence */}
       <div className={royalDashboardStyles.mainBox + " !items-center !justify-center"}>
@@ -196,7 +333,10 @@ const DashboardPage = () => {
                         <span className="text-sm font-bold text-white tracking-wide">{d.category_name || '—'}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-base font-serif font-black text-[#FBDB8C]">₹{parseFloat(d.amount).toLocaleString('en-IN')}</span>
+                        <span className="text-base font-sans font-semibold text-[#FBDB8C] tabular-nums tracking-tight">
+                          <span className="text-[#FBDB8C]/60 mr-0.5">₹</span>
+                          {parseFloat(d.amount).toLocaleString('en-IN')}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">

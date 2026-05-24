@@ -1,9 +1,5 @@
 import 'dotenv/config';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import express from 'express';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -11,8 +7,11 @@ import morgan from 'morgan';
 import compression from 'compression';
 import { rateLimitConfig, corsConfig } from './config/index.js';
 import { pool } from './shared/db.js';
+import { initDb } from './shared/initDb.js';
 import { RedisStore } from 'rate-limit-redis';
 import redisClient from './shared/redis.js';
+
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Routes
 import authRoutes from './modules/auth/auth.routes.js';
@@ -32,11 +31,12 @@ const allowedOrigins = corsConfig.allowedOrigins;
 // 1. CORS first so preflight and all responses get headers
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    // Allow no-origin requests (server-to-server, curl) only outside production
+    if (!origin) return callback(null, !isProduction);
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    console.log(`CORS blocked: ${origin}. Allowed:`, allowedOrigins);
+    if (!isProduction) console.log(`CORS blocked: ${origin}. Allowed:`, allowedOrigins);
     return callback(null, false);
   },
   credentials: true,
@@ -81,20 +81,6 @@ app.use('/api/plans', plansRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/donations', donationsRoutes);
 
-// Static uploads with CORS so img tags from frontend can load (preview in admin)
-app.use('/uploads', (req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.set('Access-Control-Allow-Origin', origin);
-  } else if (allowedOrigins.length > 0) {
-    res.set('Access-Control-Allow-Origin', allowedOrigins[0]);
-  } else {
-    res.set('Access-Control-Allow-Origin', '*');
-  }
-  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-  next();
-}, express.static(path.join(__dirname, '..', 'uploads')));
-
 // Health check
 app.get('/health', async (req, res) => {
   try {
@@ -111,18 +97,21 @@ app.use((err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'File too large. Maximum limit is 5MB.' });
   }
-  
+
   if (err.name === 'MulterError') {
     return res.status(400).json({ error: `Upload error: ${err.message}` });
   }
 
   console.error('Server Error:', err.stack);
-  res.status(500).json({ error: err.message || 'Internal Server Error' });
+  res.status(500).json({
+    error: isProduction ? 'Internal Server Error' : (err.message || 'Internal Server Error'),
+  });
 });
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`🐘 Ganesha Seva Platform running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
   console.log(`Allowed Origins:`, allowedOrigins);
+  await initDb();
 });
 
 // Graceful Shutdown Handler

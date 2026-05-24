@@ -75,7 +75,7 @@ const RegisterPage = () => {
   if (token && user) return null;
 
   return (
-    <div className={commonStyles.pageContainer + " flex items-center justify-center p-4 relative overflow-hidden py-12"}>
+    <div className={commonStyles.pageContainerCentered}>
       <div className={authStyles.authCard}>
         
         <div className={authStyles.topLineDecoration} />

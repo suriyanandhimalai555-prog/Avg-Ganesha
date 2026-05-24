@@ -11,6 +11,11 @@ const CACHE_KEYS = {
   ADMIN_STATS: 'admin:stats'
 };
 
+// AVG Coin reward config for the 1.5 Ft Statue donation.
+// Coins are locked (non-withdrawable) for 5 years from the donation purchase date.
+const STATUE_15FT_COIN_REWARD = 100;
+const STATUE_15FT_LOCK_YEARS = 5;
+
 
 // --- Get all categories (public) ---
 export const getCategories = async (req, res) => {
@@ -287,11 +292,39 @@ export const reviewDonation = async (req, res) => {
     const updateResult = await query(
       `UPDATE donations SET status = $1, rejection_reason = $2, updated_at = NOW()
        WHERE id = $3 AND status = 'PENDING'
-       RETURNING id`,
+       RETURNING id, user_id, category_id, created_at`,
       [status, status === 'REJECTED' ? rejectionReason || null : null, donationId]
     );
     if (updateResult.rows.length === 0) {
       return res.status(404).json({ error: 'Donation not found or already reviewed' });
+    }
+
+    // On CONFIRMED 1.5 Ft Statue donation: award 100 AVG coins locked for 5 years
+    // from the purchase date (donation.created_at). Idempotent via UNIQUE(donation_id).
+    if (status === 'CONFIRMED') {
+      const donation = updateResult.rows[0];
+      const categoryRes = await query(
+        'SELECT slug FROM donation_categories WHERE id = $1::int',
+        [donation.category_id]
+      );
+      if (categoryRes.rows[0]?.slug === 'statue_1_5_ft') {
+        await query(
+          `INSERT INTO user_avg_coins
+             (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
+           VALUES (
+             $1, $2, $3, 'STATUE_1_5_FT_DONATION', $4,
+             ($4::timestamptz + ($5 || ' years')::interval), FALSE
+           )
+           ON CONFLICT (donation_id) DO NOTHING`,
+          [
+            donation.user_id,
+            donation.id,
+            STATUE_15FT_COIN_REWARD,
+            donation.created_at,
+            STATUE_15FT_LOCK_YEARS,
+          ]
+        );
+      }
     }
 
     // Invalidate relevant caches
@@ -304,5 +337,49 @@ export const reviewDonation = async (req, res) => {
   } catch (err) {
     console.error('Review donation error:', err);
     res.status(500).json({ error: 'Failed to review donation' });
+  }
+};
+
+// --- User's AVG coin balance + locked entries ---
+export const getMyCoins = async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const result = await query(
+      `SELECT c.id, c.donation_id, c.amount, c.source, c.earned_at, c.locked_until, c.is_withdrawable
+       FROM user_avg_coins c
+       WHERE c.user_id = $1
+       ORDER BY c.earned_at ASC`,
+      [userId]
+    );
+
+    const entries = result.rows.map((r) => ({
+      id: r.id,
+      donationId: r.donation_id,
+      amount: parseFloat(r.amount),
+      source: r.source,
+      earnedAt: r.earned_at,
+      lockedUntil: r.locked_until,
+      isWithdrawable: r.is_withdrawable,
+    }));
+
+    const totalBalance = entries.reduce((sum, e) => sum + e.amount, 0);
+    const lockedBalance = entries
+      .filter((e) => !e.isWithdrawable && new Date(e.lockedUntil) > new Date())
+      .reduce((sum, e) => sum + e.amount, 0);
+    const nextUnlockAt = entries
+      .filter((e) => !e.isWithdrawable && new Date(e.lockedUntil) > new Date())
+      .map((e) => new Date(e.lockedUntil))
+      .sort((a, b) => a - b)[0] || null;
+
+    res.json({
+      totalBalance,
+      lockedBalance,
+      withdrawableBalance: totalBalance - lockedBalance,
+      nextUnlockAt,
+      entries,
+    });
+  } catch (err) {
+    console.error('Get my coins error:', err);
+    res.status(500).json({ error: 'Failed to fetch AVG coins' });
   }
 };
