@@ -18,10 +18,10 @@ import {
 // Pick a font-size class for the MEMBER NAME card so long names don't overflow the card.
 const nameSizeClass = (name) => {
   const len = (name || '').trim().length;
-  if (len <= 12) return 'text-2xl';
-  if (len <= 18) return 'text-xl';
-  if (len <= 26) return 'text-lg';
-  return 'text-base';
+  if (len <= 8)  return 'text-2xl';
+  if (len <= 12) return 'text-xl';
+  if (len <= 18) return 'text-base';
+  return 'text-sm';
 };
 
 // Live countdown to a target Date. Returns y/d/h/m/s remaining (or all zeros once unlocked).

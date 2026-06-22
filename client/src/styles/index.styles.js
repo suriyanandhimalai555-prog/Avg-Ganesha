@@ -395,21 +395,21 @@ export const royalDashboardStyles = {
   container: "min-h-screen bg-[#060B28] text-white p-4 md:p-8 animate-fade-in",
   headerTitle: "text-2xl md:text-3xl font-serif font-bold text-[#FBDB8C] tracking-[0.1em] uppercase text-center mb-10 drop-shadow-[0_0_10px_rgba(251,191,36,0.3)]",
 
-  statsRow: "grid grid-cols-1 lg:grid-cols-4 gap-6 mb-12",
+  statsRow: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12",
 
   // Premium Card
-  card: "relative bg-gradient-to-b from-[#0A194E] to-[#040924] border border-[#FBDB8C]/20 rounded-xl p-6 flex flex-col items-center justify-center text-center shadow-[0_0_20px_rgba(0,0,0,0.4)] group overflow-hidden h-44",
+  card: "relative bg-gradient-to-b from-[#0A194E] to-[#040924] border border-[#FBDB8C]/20 rounded-xl p-6 flex flex-col items-center justify-center text-center shadow-[0_0_20px_rgba(0,0,0,0.4)] group overflow-hidden min-h-44",
   cardGlowTop: "absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#FBDB8C]/60 to-transparent",
   cardGlowBottom: "absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#FBDB8C]/60 to-transparent",
 
   cardIcon: "w-10 h-10 mb-3 text-[#FBDB8C] drop-shadow-[0_0_8px_rgba(251,219,140,0.4)]",
-  cardLabel: "text-[10px] font-bold text-[#FBDB8C]/60 uppercase tracking-[0.2em] mb-2",
-  // For text values (e.g. KYC status) — kept as serif since it's a word
-  cardValue: "text-xl md:text-2xl font-serif font-bold text-white tracking-widest uppercase truncate w-full px-4 text-center",
+  cardLabel: "text-[10px] font-bold text-[#FBDB8C]/60 uppercase tracking-[0.1em] mb-2 w-full text-center",
+  // For text values (e.g. KYC status) — single line, ellipsis if needed
+  cardValue: "text-lg font-serif font-bold text-white tracking-wider uppercase truncate w-full px-2 text-center",
   // Numeric values (₹ amounts, statue #) — sans + tabular + white for consistency
   cardValueNumber: "text-2xl md:text-3xl font-sans font-semibold text-white tabular-nums tracking-tight w-full px-2 text-center leading-none",
-  // Name variant: allow wrapping (long names) — size class is chosen by the consumer (`nameSizeClass` helper)
-  cardValueName: "font-serif font-bold text-white tracking-wide uppercase w-full px-3 text-center break-words leading-tight line-clamp-2",
+  // Name variant: single line, ellipsis if too long — size class chosen by nameSizeClass helper
+  cardValueName: "font-serif font-bold text-white tracking-wide uppercase w-full px-2 text-center truncate",
 
   // Status Badge (Large)
   statusBadge: "relative w-48 h-48 md:w-56 md:h-56 flex flex-col items-center justify-center mx-auto",
