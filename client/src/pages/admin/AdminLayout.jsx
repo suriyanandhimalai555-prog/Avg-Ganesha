@@ -10,15 +10,17 @@ import {
   Heart,
   Briefcase,
   Settings,
+  Network,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { logout } from '../../redux/slices/authSlice';
 import { commonStyles, adminStyles } from '../../styles/index.styles';
 
 const TABS = [
-  { to: '/admin/devotees', label: 'Devotees',         Icon: Users },
-  { to: '/admin/seva',     label: 'Seva Offerings',   Icon: Briefcase },
-  { to: '/admin/settings', label: 'Account Settings', Icon: Settings },
+  { to: '/admin/devotees',    label: 'Devotees',         Icon: Users },
+  { to: '/admin/invite-tree', label: 'Invite Tree',      Icon: Network },
+  { to: '/admin/seva',        label: 'Seva Offerings',   Icon: Briefcase },
+  { to: '/admin/settings',    label: 'Account Settings', Icon: Settings },
 ];
 
 const AdminLayout = () => {

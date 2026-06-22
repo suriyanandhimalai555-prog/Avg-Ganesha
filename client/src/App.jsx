@@ -8,6 +8,7 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDevotees from './pages/admin/AdminDevotees';
+import AdminInviteTree from './pages/admin/AdminInviteTree';
 import AdminSeva from './pages/admin/AdminSeva';
 import AdminSettings from './pages/admin/AdminSettings';
 import DashboardLayout from './components/DashboardLayout';
@@ -61,6 +62,7 @@ function AppContent() {
       >
         <Route index element={<Navigate to="devotees" replace />} />
         <Route path="devotees" element={<AdminDevotees />} />
+        <Route path="invite-tree" element={<AdminInviteTree />} />
         <Route path="seva" element={<AdminSeva />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>

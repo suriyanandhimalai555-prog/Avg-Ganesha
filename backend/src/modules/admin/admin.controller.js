@@ -229,7 +229,30 @@ export const updateUserDetails = async (req, res) => {
   }
 };
 
-// --- 6. Generate a pre-signed URL for a private S3 object ---
+// --- 7. Invite Tree: flat list of every user + their inviter link ---
+// Returns the raw adjacency list (each user carries `invited_by`); the client
+// assembles the forest. `invited_by` is a self-FK with ON DELETE SET NULL, so a
+// NULL value means a root (organic signup) — no dangling parents to worry about.
+//
+// NOTE: this fetches ALL users in one query. Fine at current scale. If the
+// devotee base grows into the thousands, switch to lazy per-node expansion
+// (e.g. GET /invite-tree?parentId=<id> returning only direct invitees) so the
+// admin isn't shipping the whole user table on every page load.
+export const getInviteTree = async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, full_name, email, role, invite_code, invite_count, invited_by, created_at
+       FROM users
+       ORDER BY created_at ASC`
+    );
+    res.json({ users: result.rows });
+  } catch (err) {
+    console.error('Invite Tree Error:', err);
+    res.status(500).json({ error: 'Failed to fetch invite tree' });
+  }
+};
+
+// --- 8. Generate a pre-signed URL for a private S3 object ---
 export const getSignedImageUrl = async (req, res) => {
   const { s3Uri } = req.body;
   if (!s3Uri) {

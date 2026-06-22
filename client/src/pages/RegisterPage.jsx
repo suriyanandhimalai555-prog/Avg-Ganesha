@@ -22,6 +22,7 @@ const RegisterPage = () => {
   const queryParams = new URLSearchParams(window.location.search);
   const redirectParams = queryParams.get('redirect');
   const inviteFromUrl = queryParams.get('invite') || '';
+  const inviteLocked = Boolean(inviteFromUrl.trim());
 
   useEffect(() => {
     if (inviteFromUrl) {
@@ -130,7 +131,7 @@ const RegisterPage = () => {
             <label className={authStyles.inputLabel}>Phone Number</label>
             <div className="relative">
               <div className={authStyles.inputIconWrapper}>
-                <Mail size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
+                <Phone size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
               </div>
               <input
                 type="tel"
@@ -178,7 +179,9 @@ const RegisterPage = () => {
 
           {/* Invite Code */}
           <div className={authStyles.inputGroup}>
-            <label className={authStyles.inputLabel}>Invite Code (Optional)</label>
+            <label className={authStyles.inputLabel}>
+              Invite Code {inviteLocked ? '(From Invite Link)' : '(Optional)'}
+            </label>
             <div className="relative">
               <div className={authStyles.inputIconWrapper}>
                 <Gift size={18} className="text-gray-400 group-focus-within:text-gs-teal transition-colors" />
@@ -186,8 +189,10 @@ const RegisterPage = () => {
               <input
                 type="text" name="inviteCode"
                 value={formData.inviteCode} onChange={handleChange}
-                className={authStyles.inputBase}
+                className={authStyles.inputBase + (inviteLocked ? ' opacity-70 cursor-not-allowed' : '')}
                 placeholder="GAN-XXXXX"
+                readOnly={inviteLocked}
+                aria-readonly={inviteLocked}
               />
             </div>
           </div>
