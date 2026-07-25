@@ -1,26 +1,104 @@
-import { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
 import {
-  Shield,
+  LayoutDashboard,
   Users,
-  LogOut,
-  CheckCircle,
-  FileText,
-  Heart,
-  Briefcase,
-  Settings,
+  ShieldCheck,
+  HeartHandshake,
   Network,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  PlusCircle,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { logout } from '../../redux/slices/authSlice';
-import { commonStyles, adminStyles } from '../../styles/index.styles';
 
-const TABS = [
-  { to: '/admin/devotees',    label: 'Devotees',         Icon: Users },
-  { to: '/admin/invite-tree', label: 'Invite Tree',      Icon: Network },
-  { to: '/admin/seva',        label: 'Seva Offerings',   Icon: Briefcase },
-  { to: '/admin/settings',    label: 'Account Settings', Icon: Settings },
+/*
+  Admin Console shell (Zoho-style)
+  ================================
+  A persistent left sidebar with grouped modules + live work-queue badges,
+  a slim top bar, and a focused content area. Stats are fetched here so the
+  sidebar badges stay live; children read them via <Outlet context> and can
+  request a refresh by firing `admin:refresh-stats` (kept for backwards compat)
+  or calling the `refreshStats` helper from context.
+*/
+
+// Nav groups. Each item computes its own `active` because two items share the
+// same /admin/devotees path (Devotees = all, KYC Review = SUBMITTED filter),
+// which NavLink's path-only matching can't distinguish.
+const NAV_GROUPS = [
+  {
+    label: 'Main',
+    items: [
+      {
+        key: 'overview',
+        to: '/admin',
+        label: 'Overview',
+        Icon: LayoutDashboard,
+        match: ({ pathname }) => pathname === '/admin',
+      },
+    ],
+  },
+  {
+    label: 'Manage',
+    items: [
+      {
+        key: 'devotees',
+        to: '/admin/devotees',
+        label: 'Devotees',
+        Icon: Users,
+        match: ({ pathname, filter }) =>
+          pathname.startsWith('/admin/devotees') && filter !== 'SUBMITTED',
+      },
+      {
+        key: 'kyc',
+        to: '/admin/devotees?filter=SUBMITTED',
+        label: 'KYC Review',
+        Icon: ShieldCheck,
+        badgeKey: 'submittedKYC',
+        match: ({ pathname, filter }) =>
+          pathname.startsWith('/admin/devotees') && filter === 'SUBMITTED',
+      },
+      {
+        key: 'seva',
+        to: '/admin/seva',
+        label: 'Seva Offerings',
+        Icon: HeartHandshake,
+        badgeKey: 'pendingDonations',
+        match: ({ pathname }) =>
+          pathname.startsWith('/admin/seva') && !pathname.startsWith('/admin/seva-entry'),
+      },
+      {
+        key: 'seva-entry',
+        to: '/admin/seva-entry',
+        label: 'Record Seva',
+        Icon: PlusCircle,
+        match: ({ pathname }) => pathname.startsWith('/admin/seva-entry'),
+      },
+      {
+        key: 'invite-tree',
+        to: '/admin/invite-tree',
+        label: 'Invite Tree',
+        Icon: Network,
+        match: ({ pathname }) => pathname.startsWith('/admin/invite-tree'),
+      },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      {
+        key: 'settings',
+        to: '/admin/settings',
+        label: 'Settings',
+        Icon: Settings,
+        match: ({ pathname }) => pathname.startsWith('/admin/settings'),
+      },
+    ],
+  },
 ];
 
 const AdminLayout = () => {
@@ -32,10 +110,13 @@ const AdminLayout = () => {
     pendingDonations: 0,
   });
   const [statsLoading, setStatsLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const user = useSelector((state) => state.auth.user);
 
   const handleLogout = useCallback(() => {
     dispatch(logout());
@@ -67,148 +148,178 @@ const AdminLayout = () => {
     return () => window.removeEventListener('admin:refresh-stats', handler);
   }, [fetchStats]);
 
-  // Clicking the "Pending Seva" stat jumps to the Seva tab with pending filter
-  const goToPendingSeva = () => {
-    navigate('/admin/seva?status=PENDING');
-  };
+  // Close the mobile drawer on navigation.
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname, location.search]);
+
+  const filter = (searchParams.get('filter') || '').toUpperCase();
+  const routeCtx = { pathname: location.pathname, filter };
+
+  const activeItem = useMemo(() => {
+    for (const group of NAV_GROUPS) {
+      const found = group.items.find((it) => it.match(routeCtx));
+      if (found) return found;
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, filter]);
+
+  const pageTitle = activeItem?.label || 'Admin';
 
   return (
-    <div className={commonStyles.pageContainer}>
-      {/* Navbar */}
-      <nav className={adminStyles.navbar}>
-        <div className={adminStyles.navbarInner}>
-          <div className={adminStyles.navbarContent}>
-            <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
-              <div className={adminStyles.navbarLogoWrapper}>
-                <Shield size={18} className="md:hidden" />
-                <Shield size={20} className="hidden md:block" />
+    <div className="h-screen w-screen flex overflow-hidden bg-[#060B28] text-white font-sans">
+      {/* Mobile overlay */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/80 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
+          sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed md:relative top-0 left-0 z-50 h-full w-72 flex-shrink-0 bg-gradient-to-b from-[#060B28] to-[#040924] border-r border-[#FBDB8C]/15 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        {/* Brand */}
+        <div className="h-16 md:h-20 px-5 flex items-center justify-between border-b border-[#FBDB8C]/10 bg-black/20 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src="/Ganesha.jpeg"
+              alt="Ganesha"
+              className="w-9 h-9 rounded-full object-cover border border-[#FBDB8C]/30 shadow-sm flex-shrink-0"
+            />
+            <div className="min-w-0">
+              <p className="text-[8px] font-serif font-semibold text-[#FBDB8C]/60 uppercase tracking-[0.3em] leading-none">
+                AVG Ganesha
+              </p>
+              <p className="text-sm font-serif font-bold text-white tracking-[0.15em] uppercase leading-tight mt-1">
+                Admin<span className="text-[#FBDB8C]"> Console</span>
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden p-2 text-white/40 hover:text-white transition-colors"
+            aria-label="Close menu"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Nav groups */}
+        <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-5 space-y-6">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 mb-2 text-[9px] font-black text-[#FBDB8C]/30 uppercase tracking-[0.3em]">
+                {group.label}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const { Icon } = item;
+                  const active = item.match(routeCtx);
+                  const badge = item.badgeKey ? stats[item.badgeKey] : 0;
+                  return (
+                    <Link
+                      key={item.key}
+                      to={item.to}
+                      className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all duration-200 ${
+                        active
+                          ? 'bg-[#FBDB8C]/10 border-[#FBDB8C]/40 text-[#FBDB8C] font-bold shadow-[0_0_15px_rgba(251,219,140,0.08)]'
+                          : 'border-transparent text-white/50 hover:text-[#FBDB8C] hover:bg-white/5 font-medium'
+                      }`}
+                    >
+                      <Icon
+                        size={17}
+                        className={active ? 'text-[#FBDB8C]' : 'text-white/40 group-hover:text-[#FBDB8C]'}
+                      />
+                      <span className="flex-1 text-xs tracking-wide">{item.label}</span>
+                      {item.badgeKey && !statsLoading && badge > 0 && (
+                        <span className="min-w-[20px] px-1.5 py-0.5 text-[10px] font-black text-[#060B28] bg-[#FBDB8C] rounded-full text-center tabular-nums shadow-[0_0_10px_rgba(251,219,140,0.3)]">
+                          {badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
               </div>
-              <div className="min-w-0 flex-1">
-                <p className={`${commonStyles.preTitle} hidden md:block`}>॥ அகில வெற்றி கணேஷா ॥</p>
-                <h1 className={adminStyles.navbarTitle + ' flex items-center gap-2 min-w-0'}>
-                  <img
-                    src="/Ganesha.jpeg"
-                    alt="Ganesha"
-                    className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover shadow-sm border border-gs-teal/10 flex-shrink-0"
-                  />
-                  <span className="truncate">
-                    <span className="md:hidden">AVG Ganesha</span>
-                    <span className="hidden md:inline">World Of Agilavetri Ganesha</span>
-                    <span className="text-gs-teal font-sans font-medium ml-2">| ADMIN</span>
-                  </span>
-                </h1>
+            </div>
+          ))}
+        </nav>
+
+        {/* Footer: identity + logout */}
+        <div className="p-3 border-t border-[#FBDB8C]/10 bg-black/20 flex-shrink-0">
+          <div className="flex items-center gap-3 px-2 py-2 mb-2">
+            <div className="h-9 w-9 rounded-full bg-[#FBDB8C]/10 border border-[#FBDB8C]/20 flex items-center justify-center text-[#FBDB8C] font-black text-sm flex-shrink-0">
+              {user?.full_name?.charAt(0).toUpperCase() || 'A'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-white truncate">{user?.full_name || 'Administrator'}</p>
+              <p className="text-[10px] text-[#FBDB8C]/50 uppercase tracking-widest font-bold">Admin</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-white/40 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-bold uppercase tracking-widest"
+          >
+            <LogOut size={15} /> Logout
+          </button>
+        </div>
+      </aside>
+
+      {/* Main column */}
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        {/* Top bar */}
+        <header className="h-16 md:h-20 flex-shrink-0 flex items-center justify-between gap-3 px-4 md:px-8 border-b border-[#FBDB8C]/10 bg-[#060B28]/80 backdrop-blur-md">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-2.5 bg-[#FBDB8C]/10 text-[#FBDB8C] border border-[#FBDB8C]/20 rounded-xl transition-all hover:bg-[#FBDB8C]/20"
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+            <div className="min-w-0">
+              <p className="text-[9px] font-serif font-semibold text-[#FBDB8C]/50 uppercase tracking-[0.3em] leading-none hidden md:block">
+                ॥ அகில வெற்றி கணேஷா ॥
+              </p>
+              <h1 className="text-lg md:text-2xl font-serif font-bold text-white tracking-[0.1em] uppercase truncate mt-1">
+                {pageTitle}
+              </h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="hidden sm:flex items-center gap-2.5 px-3 py-2 rounded-full bg-white/5 border border-[#FBDB8C]/15">
+              <div className="h-7 w-7 rounded-full bg-[#FBDB8C]/10 border border-[#FBDB8C]/20 flex items-center justify-center text-[#FBDB8C] font-black text-xs">
+                {user?.full_name?.charAt(0).toUpperCase() || 'A'}
               </div>
+              <span className="text-xs font-bold text-white/80 truncate max-w-[140px]">
+                {user?.full_name || 'Administrator'}
+              </span>
             </div>
             <button
               type="button"
               onClick={handleLogout}
-              className={adminStyles.logoutBtn}
+              className="sm:hidden p-2.5 text-[#FBDB8C] hover:bg-white/5 border border-[#FBDB8C]/20 rounded-xl transition-all"
               aria-label="Logout"
             >
-              <LogOut size={14} className="md:hidden" />
-              <LogOut size={16} className="hidden md:block" />
-              <span className="hidden sm:inline">Logout</span>
+              <LogOut size={16} />
             </button>
           </div>
-        </div>
-      </nav>
+        </header>
 
-      <main className={commonStyles.mainContent + ' pb-20'}>
-        {/* Stats grid (sticky context for every admin page) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-8 md:mb-10">
-          <StatTile
-            title="ALL DEVOTEES"
-            value={stats.totalUsers}
-            Icon={Users}
-            colorClass="text-[#FBDB8C]"
-            loading={statsLoading}
-            onClick={() => navigate('/admin/devotees?filter=ALL')}
-          />
-          <StatTile
-            title="KYC REVIEW"
-            value={stats.submittedKYC}
-            Icon={FileText}
-            colorClass="text-amber-400"
-            loading={statsLoading}
-            onClick={() => navigate('/admin/devotees?filter=SUBMITTED')}
-          />
-          <StatTile
-            title="VERIFIED"
-            value={stats.approvedKYC}
-            Icon={CheckCircle}
-            colorClass="text-emerald-400"
-            loading={statsLoading}
-            onClick={() => navigate('/admin/devotees?filter=APPROVED')}
-          />
-          <StatTile
-            title="TOTAL INVITED"
-            value={stats.totalInvited}
-            Icon={Users}
-            colorClass="text-purple-400"
-            loading={statsLoading}
-            onClick={() => navigate('/admin/devotees?filter=ALL')}
-          />
-          <div
-            onClick={goToPendingSeva}
-            className={`${adminStyles.donationStatBox} cursor-pointer hover:-translate-y-1 transition-all`}
-          >
-            <div className="relative z-10">
-              <h3 className={adminStyles.statCardLabel}>PENDING SEVA</h3>
-              <p className={adminStyles.statCardValueAmber}>
-                {statsLoading ? '…' : (stats.pendingDonations ?? 0)}
-              </p>
-            </div>
-            <div className={adminStyles.donationStatIcon}>
-              <Heart size={20} />
-            </div>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto scroll-smooth">
+          <div className="p-4 md:p-8 max-w-[1600px] mx-auto min-h-full">
+            <Outlet context={{ stats, statsLoading, refreshStats: fetchStats }} />
           </div>
-        </div>
-
-        {/* Tab navigation — each tab is a separate route */}
-        <div className="mb-8 border-b border-[#FBDB8C]/10">
-          <div className="flex flex-wrap items-center gap-1">
-            {/* eslint-disable-next-line no-unused-vars */}
-            {TABS.map(({ to, label, Icon }) => {
-              const active = location.pathname.startsWith(to);
-              return (
-                <NavLink
-                  key={to}
-                  to={to}
-                  className={`group inline-flex items-center gap-2 px-5 py-3 text-[10px] font-black uppercase tracking-[0.25em] border-b-2 -mb-px transition-all ${
-                    active
-                      ? 'text-[#FBDB8C] border-[#FBDB8C] bg-[#FBDB8C]/5'
-                      : 'text-white/40 border-transparent hover:text-[#FBDB8C]/80 hover:bg-white/5'
-                  }`}
-                >
-                  <Icon size={14} className={active ? 'text-[#FBDB8C]' : 'text-white/40 group-hover:text-[#FBDB8C]/80'} />
-                  {label}
-                </NavLink>
-              );
-            })}
-          </div>
-        </div>
-
-        <Outlet />
-      </main>
+        </main>
+      </div>
     </div>
   );
 };
-
-// eslint-disable-next-line no-unused-vars
-const StatTile = ({ title, value, Icon, colorClass, loading, onClick }) => (
-  <div
-    onClick={onClick}
-    className={`${adminStyles.statCardBase} ${adminStyles.statCardInactive}`}
-  >
-    <div className={adminStyles.statCardDecoration} />
-    <div className="relative z-10">
-      <h3 className={adminStyles.statCardLabel}>{title}</h3>
-      <p className={adminStyles.statCardValue}>{loading ? '…' : value}</p>
-    </div>
-    <div className={`${adminStyles.statCardIconWrapper} ${colorClass}`}>
-      <Icon size={24} />
-    </div>
-  </div>
-);
 
 export default AdminLayout;

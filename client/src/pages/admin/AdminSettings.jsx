@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Shield } from 'lucide-react';
 import api from '../../api/axios';
 import { API_ROUTES } from '../../config/api';
-import { adminStyles } from '../../styles/index.styles';
+import { AdminPageHeader, AdminCard } from './AdminChrome';
 
 const AdminSettings = () => {
   const [bankDetails, setBankDetails] = useState({
@@ -56,15 +55,12 @@ const AdminSettings = () => {
   };
 
   return (
-    <section className="animate-fade-in">
-      <div className={adminStyles.sectionBox}>
-        <div className="flex items-center gap-4 mb-10 pb-4 border-b border-[#FBDB8C]/10">
-          <Shield className="text-[#FBDB8C]" size={24} />
-          <h2 className="text-xl font-serif font-black text-[#FBDB8C] tracking-[0.2em] uppercase">
-            Donation Account Settings
-          </h2>
-        </div>
-
+    <section className="animate-fade-in max-w-4xl">
+      <AdminPageHeader
+        title="Account Settings"
+        subtitle="Donation bank account details shown to devotees on the donate page."
+      />
+      <AdminCard className="p-6 md:p-8">
         {loading ? (
           <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest">
             Loading bank details...
@@ -123,7 +119,7 @@ const AdminSettings = () => {
             </div>
           </>
         )}
-      </div>
+      </AdminCard>
     </section>
   );
 };

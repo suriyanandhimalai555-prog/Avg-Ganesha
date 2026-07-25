@@ -22,5 +22,6 @@ export const API_ROUTES = Object.freeze({
     MY_STATS: '/api/donations/my-stats',
     ADMIN_PENDING: '/api/donations/admin/pending',
     ADMIN_REVIEW: (id) => `/api/donations/admin/review/${id}`,
+    ADMIN_ENTRY: '/api/donations/admin/entry',
   },
 });

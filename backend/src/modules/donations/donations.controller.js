@@ -15,6 +15,43 @@ const CACHE_KEYS = {
 // Coins are locked (non-withdrawable) for 5 years from the donation purchase date.
 const STATUE_15FT_COIN_REWARD = 100;
 const STATUE_15FT_LOCK_YEARS = 5;
+const STATUE_SLUG = 'statue_1_5_ft';
+
+// Award 100 AVG coins for a 1.5 Ft Statue donation, locked for 5 years from the
+// donation's purchase date (created_at). Idempotent via UNIQUE(donation_id).
+// Shared by admin review (reviewDonation) and admin on-behalf entry (createAdminEntry).
+async function awardStatueCoins(donation) {
+  await query(
+    `INSERT INTO user_avg_coins
+       (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
+     VALUES (
+       $1, $2, $3, 'STATUE_1_5_FT_DONATION', $4,
+       ($4::timestamptz + ($5 || ' years')::interval), FALSE
+     )
+     ON CONFLICT (donation_id) DO NOTHING`,
+    [donation.user_id, donation.id, STATUE_15FT_COIN_REWARD, donation.created_at, STATUE_15FT_LOCK_YEARS]
+  );
+}
+
+// Insert a statue (1.5 Ft) donation, assigning a statue_number only on the user's
+// FIRST statue donation (their seat is locked in); repeat statue donations reuse it
+// (NULL number). Shared by submit + admin entry. Returns the inserted donation row.
+async function insertStatueDonation({ userId, categoryId, amount, paymentProofPath, status }) {
+  const existingStatueRes = await query(
+    `SELECT statue_number FROM donations
+     WHERE user_id = $1 AND statue_number IS NOT NULL
+     ORDER BY created_at ASC LIMIT 1`,
+    [userId]
+  );
+  const alreadyHasStatue = existingStatueRes.rows.length > 0;
+  const numberExpr = alreadyHasStatue ? 'NULL' : `nextval('statue_number_seq')`;
+  const result = await query(
+    `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, statue_number, status)
+     VALUES ($1, $2, $3, $4, ${numberExpr}, $5) RETURNING *`,
+    [userId, categoryId, amount, paymentProofPath, status]
+  );
+  return result.rows[0];
+}
 
 
 // --- Get all categories (public) ---
@@ -307,23 +344,8 @@ export const reviewDonation = async (req, res) => {
         'SELECT slug FROM donation_categories WHERE id = $1::int',
         [donation.category_id]
       );
-      if (categoryRes.rows[0]?.slug === 'statue_1_5_ft') {
-        await query(
-          `INSERT INTO user_avg_coins
-             (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
-           VALUES (
-             $1, $2, $3, 'STATUE_1_5_FT_DONATION', $4,
-             ($4::timestamptz + ($5 || ' years')::interval), FALSE
-           )
-           ON CONFLICT (donation_id) DO NOTHING`,
-          [
-            donation.user_id,
-            donation.id,
-            STATUE_15FT_COIN_REWARD,
-            donation.created_at,
-            STATUE_15FT_LOCK_YEARS,
-          ]
-        );
+      if (categoryRes.rows[0]?.slug === STATUE_SLUG) {
+        await awardStatueCoins(donation);
       }
     }
 
@@ -337,6 +359,85 @@ export const reviewDonation = async (req, res) => {
   } catch (err) {
     console.error('Review donation error:', err);
     res.status(500).json({ error: 'Failed to review donation' });
+  }
+};
+
+// --- Admin: record a seva/donation entry on behalf of a user ---
+// The admin picks a devotee + category + amount and records the seva directly
+// (e.g. offline cash/bank). Entries default to CONFIRMED and are indistinguishable
+// from user submissions: same statue-number assignment + 100-coin award for a
+// confirmed 1.5 Ft statue seva. No payment proof (stored as empty string).
+export const createAdminEntry = async (req, res) => {
+  const userId = req.body.userId ?? req.body.user_id;
+  const categoryId = req.body.categoryId ?? req.body.category_id;
+  const amount = parseFloat(req.body.amount);
+  const status = (req.body.status || 'CONFIRMED').toUpperCase();
+
+  try {
+    if (!userId || !categoryId) {
+      return res.status(400).json({ error: 'userId and categoryId are required' });
+    }
+    if (Number.isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'A valid positive amount is required' });
+    }
+    if (!['CONFIRMED', 'PENDING'].includes(status)) {
+      return res.status(400).json({ error: "status must be CONFIRMED or PENDING" });
+    }
+
+    // Validate devotee exists
+    const userRes = await query('SELECT id FROM users WHERE id = $1::int', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Devotee not found' });
+    }
+
+    // Validate category
+    const categoryRes = await query(
+      'SELECT id, name, slug FROM donation_categories WHERE id = $1::int',
+      [categoryId]
+    );
+    const category = categoryRes.rows[0];
+    if (!category) {
+      return res.status(400).json({ error: `No category found for id: ${categoryId}` });
+    }
+
+    const isStatue = category.slug === STATUE_SLUG;
+
+    // Insert (empty proof — admin-recorded offline entry)
+    let donation;
+    if (isStatue) {
+      donation = await insertStatueDonation({
+        userId,
+        categoryId,
+        amount,
+        paymentProofPath: '',
+        status,
+      });
+    } else {
+      const result = await query(
+        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, status)
+         VALUES ($1, $2, $3, '', $4) RETURNING *`,
+        [userId, categoryId, amount, status]
+      );
+      donation = result.rows[0];
+    }
+
+    // Award coins immediately for a confirmed statue seva (mirrors reviewDonation)
+    if (status === 'CONFIRMED' && isStatue) {
+      await awardStatueCoins(donation);
+    }
+
+    await Promise.all([
+      invalidateCache(CACHE_KEYS.GLOBAL_STATUE_COUNT),
+      invalidateCache(CACHE_KEYS.ADMIN_STATS),
+    ]);
+
+    res.status(201).json({
+      message: `Seva entry recorded (${status.toLowerCase()})`,
+      donation,
+    });
+  } catch (err) {
+    console.error('Admin create entry error:', err);
+    res.status(500).json({ error: 'Failed to record seva entry' });
   }
 };
 

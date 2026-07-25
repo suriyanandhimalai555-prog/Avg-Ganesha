@@ -7,9 +7,11 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminDevotees from './pages/admin/AdminDevotees';
 import AdminInviteTree from './pages/admin/AdminInviteTree';
 import AdminSeva from './pages/admin/AdminSeva';
+import AdminSevaEntry from './pages/admin/AdminSevaEntry';
 import AdminSettings from './pages/admin/AdminSettings';
 import DashboardLayout from './components/DashboardLayout';
 import PlansPage from './pages/PlansPage';
@@ -60,10 +62,11 @@ function AppContent() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="devotees" replace />} />
+        <Route index element={<AdminDashboard />} />
         <Route path="devotees" element={<AdminDevotees />} />
         <Route path="invite-tree" element={<AdminInviteTree />} />
         <Route path="seva" element={<AdminSeva />} />
+        <Route path="seva-entry" element={<AdminSevaEntry />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 

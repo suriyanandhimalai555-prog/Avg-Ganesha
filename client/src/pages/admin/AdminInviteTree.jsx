@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/axios';
 import LoadingScreen from '../../components/LoadingScreen';
+import { AdminPageHeader } from './AdminChrome';
 
 /*
   Admin Invite Tree
@@ -181,14 +182,10 @@ const AdminInviteTree = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-black uppercase tracking-[0.25em] text-[#FBDB8C] flex items-center gap-2">
-          <Users size={18} /> Invite Tree
-        </h2>
-        <p className="text-white/40 text-xs mt-1">
-          Who invited whom across the whole community. Roots are organic signups.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Invite Tree"
+        subtitle="Who invited whom across the whole community. Roots are organic signups."
+      />
 
       {/* Summary tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

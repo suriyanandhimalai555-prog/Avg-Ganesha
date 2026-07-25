@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Search,
   Mail,
   CheckCircle,
   Clock,
@@ -16,6 +15,13 @@ import { commonStyles, adminStyles } from '../../styles/index.styles';
 import { S3Image, S3Anchor } from '../../utils/s3Utils.jsx';
 import ActionConfirmModal from './ActionConfirmModal';
 import LoadingScreen from '../../components/LoadingScreen';
+import {
+  AdminPageHeader,
+  AdminSearchInput,
+  AdminFilterChips,
+  AdminCard,
+  AdminPagination,
+} from './AdminChrome';
 
 const STATUS_FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'REJECTED'];
 
@@ -119,42 +125,28 @@ const AdminSeva = () => {
   return (
     <section className="animate-fade-in">
       {/* Section header */}
-      <div className="mb-6 md:mb-8 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-6">
-          <h2 className="text-lg md:text-xl font-serif font-black text-[#FBDB8C] tracking-[0.2em] uppercase">
-            Seva Offerings
-          </h2>
-          <div className="relative w-full md:w-72">
-            <input
-              type="text"
-              placeholder="Search by name, email, category..."
-              className="w-full bg-white/5 border border-[#FBDB8C]/10 text-white rounded-2xl py-3 pl-10 pr-4 focus:border-[#FBDB8C]/40 outline-none transition-all placeholder-white/20 text-xs font-medium"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            />
-            <Search className="w-4 h-4 text-[#FBDB8C]/40 absolute left-3 top-1/2 -translate-y-1/2" />
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {STATUS_FILTERS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => { setStatusFilter(s); setPage(1); }}
-              className={`text-[9px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border transition-all ${
-                statusFilter === s
-                  ? 'bg-[#FBDB8C]/20 text-[#FBDB8C] border-[#FBDB8C]/40'
-                  : 'bg-white/5 text-white/40 border-white/10 hover:border-white/20'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Seva Offerings"
+        subtitle="Review and confirm devotee seva contributions."
+        actions={
+          <AdminSearchInput
+            className="w-full md:w-72"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search by name, email, category..."
+          />
+        }
+        toolbar={
+          <AdminFilterChips
+            options={STATUS_FILTERS}
+            value={statusFilter}
+            onChange={(s) => { setStatusFilter(s); setPage(1); }}
+          />
+        }
+      />
 
       {/* Table */}
-      <div className={commonStyles.tableContainer}>
+      <AdminCard>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/5">
             <thead className={commonStyles.tableHead}>
@@ -271,31 +263,13 @@ const AdminSeva = () => {
         </div>
 
         {/* Pagination */}
-        <div className="bg-black/20 px-3 sm:px-8 py-4 sm:py-6 flex items-center justify-between gap-2 border-t border-white/5">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="text-[10px] font-black text-[#FBDB8C] disabled:opacity-20 uppercase tracking-[0.2em] hover:bg-white/5 px-2 sm:px-4 py-2 rounded-lg transition-all whitespace-nowrap"
-          >
-            <span className="sm:hidden">← Prev</span>
-            <span className="hidden sm:inline">← Previous</span>
-          </button>
-          <div className="bg-white/5 px-3 sm:px-6 py-2 rounded-full border border-white/10 shadow-inner whitespace-nowrap">
-            <span className="text-[10px] font-black text-[#FBDB8C]/60 uppercase tracking-widest tabular-nums">
-              Page {page} / {totalPages}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="text-[10px] font-black text-[#FBDB8C] disabled:opacity-20 uppercase tracking-[0.2em] hover:bg-white/5 px-2 sm:px-4 py-2 rounded-lg transition-all whitespace-nowrap"
-          >
-            Next →
-          </button>
-        </div>
-      </div>
+        <AdminPagination
+          page={page}
+          totalPages={totalPages}
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        />
+      </AdminCard>
 
       {/* Payment Proof Modal */}
       {proofViewDonation && (
