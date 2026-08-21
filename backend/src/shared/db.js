@@ -87,3 +87,20 @@ if (!dbConfig) {
 
 export { pool };
 export const query = (text, params) => pool.query(text, params);
+
+// Run a function inside a BEGIN/COMMIT transaction, rolling back on error.
+// The callback receives a connected client; use client.query(text, params) inside.
+export async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (rbErr) { console.error('ROLLBACK failed:', rbErr); }
+    throw e;
+  } finally {
+    client.release();
+  }
+}

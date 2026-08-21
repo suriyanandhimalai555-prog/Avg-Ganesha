@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  font-size: 87.5%; /* 16px -> 14px base: shrinks the whole app to a Zoho-like density */
+}
+
 body {
   background-color: #060B28; /* royal navy background */
   color: #FFFFFF;

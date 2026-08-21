@@ -12,7 +12,9 @@ import AdminDevotees from './pages/admin/AdminDevotees';
 import AdminInviteTree from './pages/admin/AdminInviteTree';
 import AdminSeva from './pages/admin/AdminSeva';
 import AdminSevaEntry from './pages/admin/AdminSevaEntry';
+import AdminKycEntry from './pages/admin/AdminKycEntry';
 import AdminSettings from './pages/admin/AdminSettings';
+import AdminStatueNumbers from './pages/admin/AdminStatueNumbers';
 import DashboardLayout from './components/DashboardLayout';
 import PlansPage from './pages/PlansPage';
 import NetworkPage from './pages/NetworkPage';
@@ -67,6 +69,8 @@ function AppContent() {
         <Route path="invite-tree" element={<AdminInviteTree />} />
         <Route path="seva" element={<AdminSeva />} />
         <Route path="seva-entry" element={<AdminSevaEntry />} />
+        <Route path="kyc-entry" element={<AdminKycEntry />} />
+        <Route path="statue-numbers" element={<AdminStatueNumbers />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 

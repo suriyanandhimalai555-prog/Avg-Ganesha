@@ -27,3 +27,4 @@ frontend/build/
 #photo uploads
 backend/uploads
 
+.gstack/

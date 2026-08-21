@@ -5,7 +5,7 @@ import { invalidateAuthUser } from '../../middleware/authMiddleware.js';
 const CACHE_KEYS = {
   ADMIN_STATS: 'admin:stats'
 };
-import { getS3SignedUrl } from '../../shared/s3.js';
+import { getS3SignedUrl, uploadToS3 } from '../../shared/s3.js';
 
 function toRelativeUploadPath(fullPath) {
   if (!fullPath || typeof fullPath !== 'string') return null;
@@ -252,7 +252,49 @@ export const getInviteTree = async (req, res) => {
   }
 };
 
-// --- 8. Generate a pre-signed URL for a private S3 object ---
+// --- 8. Admin submit KYC on behalf of a devotee ---
+export const adminSubmitKYC = async (req, res) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+
+  if (!req.files || !req.files.idFront || !req.files.idBack) {
+    return res.status(400).json({ error: 'Both ID front and back are required' });
+  }
+
+  try {
+    const userCheck = await query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const [frontUrl, backUrl] = await Promise.all([
+      uploadToS3(req.files.idFront[0].path, 'kyc'),
+      uploadToS3(req.files.idBack[0].path, 'kyc'),
+    ]);
+
+    await query(
+      `UPDATE users
+       SET kyc_status = 'SUBMITTED',
+           kyc_rejection_reason = NULL,
+           details = jsonb_set(COALESCE(details, '{}'), '{kyc_docs}', $1),
+           updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify({ front: frontUrl, back: backUrl }), userId]
+    );
+
+    await invalidateCache(CACHE_KEYS.ADMIN_STATS);
+
+    res.json({ message: 'KYC documents uploaded. Status set to SUBMITTED.' });
+  } catch (err) {
+    console.error('Admin KYC Submit Error:', err);
+    res.status(500).json({ error: 'Server error submitting KYC' });
+  }
+};
+
+// --- 9. Generate a pre-signed URL for a private S3 object ---
 export const getSignedImageUrl = async (req, res) => {
   const { s3Uri } = req.body;
   if (!s3Uri) {

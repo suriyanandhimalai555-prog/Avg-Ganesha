@@ -11,6 +11,8 @@ import {
   getPendingDonations,
   reviewDonation,
   createAdminEntry,
+  getStatueNumbers,
+  updateStatueNumber,
   getMyCoins,
 } from './donations.controller.js';
 import { authenticateToken, authorizeRole } from '../../middleware/authMiddleware.js';
@@ -63,6 +65,8 @@ router.get('/my-coins', authenticateToken, getMyCoins);
 
 router.get('/admin/pending', authenticateToken, authorizeRole('ADMIN'), getPendingDonations);
 router.post('/admin/review/:donationId', authenticateToken, authorizeRole('ADMIN'), reviewDonation);
-router.post('/admin/entry', authenticateToken, authorizeRole('ADMIN'), createAdminEntry);
+router.post('/admin/entry', authenticateToken, authorizeRole('ADMIN'), upload.single('paymentProof'), createAdminEntry);
+router.get('/admin/statue-numbers', authenticateToken, authorizeRole('ADMIN'), getStatueNumbers);
+router.patch('/admin/statue-number/:donationId', authenticateToken, authorizeRole('ADMIN'), updateStatueNumber);
 
 export default router;

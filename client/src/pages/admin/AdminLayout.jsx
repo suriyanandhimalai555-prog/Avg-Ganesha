@@ -12,6 +12,8 @@ import {
   Menu,
   X,
   PlusCircle,
+  Hash,
+  Upload,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { logout } from '../../redux/slices/authSlice';
@@ -63,6 +65,13 @@ const NAV_GROUPS = [
           pathname.startsWith('/admin/devotees') && filter === 'SUBMITTED',
       },
       {
+        key: 'kyc-entry',
+        to: '/admin/kyc-entry',
+        label: 'Submit KYC',
+        Icon: Upload,
+        match: ({ pathname }) => pathname.startsWith('/admin/kyc-entry'),
+      },
+      {
         key: 'seva',
         to: '/admin/seva',
         label: 'Seva Offerings',
@@ -77,6 +86,13 @@ const NAV_GROUPS = [
         label: 'Record Seva',
         Icon: PlusCircle,
         match: ({ pathname }) => pathname.startsWith('/admin/seva-entry'),
+      },
+      {
+        key: 'statue-numbers',
+        to: '/admin/statue-numbers',
+        label: 'Statue Numbers',
+        Icon: Hash,
+        match: ({ pathname }) => pathname.startsWith('/admin/statue-numbers'),
       },
       {
         key: 'invite-tree',

@@ -3,13 +3,14 @@ import { useOutletContext } from 'react-router-dom';
 import {
   Search,
   Mail,
-  User as UserIcon,
   X,
   Check,
   IndianRupee,
   HeartHandshake,
   CheckCircle,
   Clock,
+  Paperclip,
+  Image as ImageIcon,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { API_ROUTES } from '../../config/api';
@@ -43,8 +44,10 @@ const AdminSevaEntry = () => {
   // Form
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('CONFIRMED');
+  const [paymentProof, setPaymentProof] = useState(null); // optional File object
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success'|'error', text }
+  const fileInputRef = useRef(null);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => String(c.id) === String(categoryId)) || null,
@@ -131,11 +134,16 @@ const AdminSevaEntry = () => {
     setSubmitting(true);
     setFeedback(null);
     try {
-      const res = await api.post(API_ROUTES.DONATIONS.ADMIN_ENTRY, {
-        userId: selectedUser.id,
-        categoryId: Number(categoryId),
-        amount: parseFloat(amount),
-        status,
+      // Send as multipart/form-data so the optional proof image travels with the fields
+      const formData = new FormData();
+      formData.append('userId', selectedUser.id);
+      formData.append('categoryId', Number(categoryId));
+      formData.append('amount', parseFloat(amount));
+      formData.append('status', status);
+      if (paymentProof) formData.append('paymentProof', paymentProof);
+
+      const res = await api.post(API_ROUTES.DONATIONS.ADMIN_ENTRY, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       setFeedback({
         type: 'success',
@@ -148,9 +156,12 @@ const AdminSevaEntry = () => {
       setCategoryId('');
       setAmount('');
       setStatus('CONFIRMED');
-      // Refresh sidebar/overview counts + any listeners
+      setPaymentProof(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      // Refresh sidebar/overview counts via AdminLayout context (avoids double-fetch
+      // that would occur if we also dispatched the 'admin:refresh-stats' event here,
+      // since AdminLayout's event listener calls the same fetchStats function).
       refreshStats?.();
-      window.dispatchEvent(new CustomEvent('admin:refresh-stats'));
     } catch (err) {
       setFeedback({
         type: 'error',
@@ -263,7 +274,7 @@ const AdminSevaEntry = () => {
           </select>
           {selectedCategory?.slug === 'statue_1_5_ft' && (
             <p className="text-[10px] text-[#FBDB8C]/60 mt-2 flex items-center gap-1.5 tracking-wide">
-              <HeartHandshake size={12} /> Confirmed 1.5 Ft statue seva awards 100 AVG coins (locked 5 yrs).
+              <HeartHandshake size={12} /> Confirmed 1.5 Ft statue seva awards 100 AVG coins on the devotee&apos;s <strong>first</strong> statue (locked 5 yrs).
             </p>
           )}
         </div>
@@ -283,6 +294,57 @@ const AdminSevaEntry = () => {
               className={commonStyles.input + ' pl-11 tabular-nums'}
             />
           </div>
+        </div>
+
+        {/* Payment proof (optional) */}
+        <div>
+          <label className={commonStyles.label}>
+            Payment Proof <span className="normal-case text-white/20 font-medium tracking-normal">— optional</span>
+          </label>
+          {paymentProof ? (
+            <div className="flex items-center gap-3 bg-white/5 border border-[#FBDB8C]/20 rounded-xl px-4 py-3">
+              <ImageIcon size={16} className="text-[#FBDB8C]/60 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-white font-medium truncate">{paymentProof.name}</p>
+                <p className="text-[11px] text-white/40">
+                  {(paymentProof.size / 1024).toFixed(0)} KB
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setPaymentProof(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-all flex-shrink-0"
+                aria-label="Remove proof"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-white/5 border border-dashed border-[#FBDB8C]/20 rounded-xl text-white/40 hover:text-[#FBDB8C] hover:border-[#FBDB8C]/40 hover:bg-white/8 transition-all text-sm"
+            >
+              <Paperclip size={16} />
+              <span className="text-xs font-medium">Attach payment screenshot or receipt…</span>
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (file.size > 5 * 1024 * 1024) {
+                setFeedback({ type: 'error', text: 'Image must be under 5 MB.' });
+                return;
+              }
+              setPaymentProof(file);
+              setFeedback(null);
+            }}
+          />
         </div>
 
         {/* Status toggle */}

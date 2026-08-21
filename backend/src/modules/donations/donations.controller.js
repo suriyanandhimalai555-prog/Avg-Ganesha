@@ -1,7 +1,7 @@
 /**
  * Donations controller - submit, list, admin approve/reject.
  */
-import { query } from '../../shared/db.js';
+import { query, withTransaction } from '../../shared/db.js';
 import { uploadToS3 } from '../../shared/s3.js';
 import { getCachedData, invalidateCache } from '../../shared/redis.js';
 
@@ -17,40 +17,53 @@ const STATUE_15FT_COIN_REWARD = 100;
 const STATUE_15FT_LOCK_YEARS = 5;
 const STATUE_SLUG = 'statue_1_5_ft';
 
-// Award 100 AVG coins for a 1.5 Ft Statue donation, locked for 5 years from the
-// donation's purchase date (created_at). Idempotent via UNIQUE(donation_id).
-// Shared by admin review (reviewDonation) and admin on-behalf entry (createAdminEntry).
-async function awardStatueCoins(donation) {
-  await query(
-    `INSERT INTO user_avg_coins
-       (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
-     VALUES (
-       $1, $2, $3, 'STATUE_1_5_FT_DONATION', $4,
-       ($4::timestamptz + ($5 || ' years')::interval), FALSE
-     )
-     ON CONFLICT (donation_id) DO NOTHING`,
-    [donation.user_id, donation.id, STATUE_15FT_COIN_REWARD, donation.created_at, STATUE_15FT_LOCK_YEARS]
-  );
-}
+// Assign the statue seat number and award 100 AVG coins for a confirmed 1.5 Ft Statue
+// donation, both inside a single transaction.
+//
+// Race-safety: we lock the user row (SELECT ... FOR UPDATE) as a per-user mutex.
+// Because the user row always exists, the lock is always acquired — unlike locking
+// donation rows with statue_number IS NOT NULL, which acquires nothing when the user
+// has no prior statue rows and leaves two concurrent first-confirmations unprotected.
+//
+// Both writes sharing one transaction means a coin-award failure can never leave a
+// committed statue number with no corresponding coin row.
+//
+// Called by reviewDonation and createAdminEntry.
+async function confirmStatueSeva(donation) {
+  await withTransaction(async (client) => {
+    // Per-user mutex: serialises all concurrent statue confirmations for this devotee.
+    await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [donation.user_id]);
 
-// Insert a statue (1.5 Ft) donation, assigning a statue_number only on the user's
-// FIRST statue donation (their seat is locked in); repeat statue donations reuse it
-// (NULL number). Shared by submit + admin entry. Returns the inserted donation row.
-async function insertStatueDonation({ userId, categoryId, amount, paymentProofPath, status }) {
-  const existingStatueRes = await query(
-    `SELECT statue_number FROM donations
-     WHERE user_id = $1 AND statue_number IS NOT NULL
-     ORDER BY created_at ASC LIMIT 1`,
-    [userId]
-  );
-  const alreadyHasStatue = existingStatueRes.rows.length > 0;
-  const numberExpr = alreadyHasStatue ? 'NULL' : `nextval('statue_number_seq')`;
-  const result = await query(
-    `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, statue_number, status)
-     VALUES ($1, $2, $3, $4, ${numberExpr}, $5) RETURNING *`,
-    [userId, categoryId, amount, paymentProofPath, status]
-  );
-  return result.rows[0];
+    // Assign seat number on first confirmed statue only.
+    const existing = await client.query(
+      `SELECT statue_number FROM donations
+       WHERE user_id = $1 AND status = 'CONFIRMED' AND statue_number IS NOT NULL AND id <> $2
+       LIMIT 1`,
+      [donation.user_id, donation.id]
+    );
+    if (existing.rows.length === 0) {
+      await client.query(
+        `UPDATE donations SET statue_number = nextval('statue_number_seq')
+         WHERE id = $1 AND statue_number IS NULL`,
+        [donation.id]
+      );
+    }
+
+    // Award 100 coins, once per devotee. The user-row lock above makes the
+    // NOT EXISTS check atomic with the INSERT for the same user.
+    await client.query(
+      `INSERT INTO user_avg_coins
+         (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
+       SELECT $1, $2, $3, 'STATUE_1_5_FT_DONATION', $4,
+              ($4::timestamptz + ($5 || ' years')::interval), FALSE
+       WHERE NOT EXISTS (
+         SELECT 1 FROM user_avg_coins
+         WHERE user_id = $1 AND source = 'STATUE_1_5_FT_DONATION'
+       )
+       ON CONFLICT (donation_id) DO NOTHING`,
+      [donation.user_id, donation.id, STATUE_15FT_COIN_REWARD, donation.created_at, STATUE_15FT_LOCK_YEARS]
+    );
+  });
 }
 
 
@@ -117,41 +130,18 @@ export const submitDonation = async (req, res) => {
       return res.status(400).json({ error: `No category found for id: ${categoryId}` });
     }
 
-    const isStatue = category.slug === 'statue_1_5_ft';
+    const isStatue = category.slug === STATUE_SLUG;
 
     let result;
     if (isStatue) {
-      // Check if this user already has a statue_number from a previous donation
-      const existingStatueRes = await query(
-        `SELECT statue_number FROM donations
-         WHERE user_id = $1
-           AND statue_number IS NOT NULL
-         ORDER BY created_at ASC
-         LIMIT 1`,
-        [user_id]
+      // statue_number is assigned at CONFIRMATION, not here — so submissions never
+      // consume a sequence value and rejections can never create gaps.
+      result = await query(
+        `INSERT INTO donations (
+           user_id, category_id, amount, payment_proof_path, statue_number, status
+         ) VALUES ($1, $2, $3, $4, NULL, 'PENDING') RETURNING *`,
+        [user_id, categoryId, amount, paymentProofUrl]
       );
-
-      const alreadyHasStatue = existingStatueRes.rows.length > 0;
-
-      if (alreadyHasStatue) {
-        // Repeat statue donation — their seat is already locked in, insert without statue_number
-        result = await query(
-          `INSERT INTO donations (
-            user_id, category_id, amount, payment_proof_path, statue_number, status
-          ) VALUES ($1, $2, $3, $4, NULL, 'PENDING') RETURNING *`,
-          [user_id, categoryId, amount, paymentProofUrl]
-        );
-      } else {
-        // First statue donation — assign a new unique number from sequence
-        result = await query(
-          `INSERT INTO donations (
-            user_id, category_id, amount, payment_proof_path, statue_number, status
-          ) VALUES (
-            $1, $2, $3, $4, nextval('statue_number_seq'), 'PENDING'
-          ) RETURNING *`,
-          [user_id, categoryId, amount, paymentProofUrl]
-        );
-      }
     } else {
       result = await query(
         `INSERT INTO donations (
@@ -336,8 +326,9 @@ export const reviewDonation = async (req, res) => {
       return res.status(404).json({ error: 'Donation not found or already reviewed' });
     }
 
-    // On CONFIRMED 1.5 Ft Statue donation: award 100 AVG coins locked for 5 years
-    // from the purchase date (donation.created_at). Idempotent via UNIQUE(donation_id).
+    // On CONFIRMED 1.5 Ft Statue donation: assign a seat number (first time only)
+    // then award 100 AVG coins locked for 5 years from the purchase date (created_at).
+    // Coin award is idempotent via UNIQUE(donation_id).
     if (status === 'CONFIRMED') {
       const donation = updateResult.rows[0];
       const categoryRes = await query(
@@ -345,7 +336,7 @@ export const reviewDonation = async (req, res) => {
         [donation.category_id]
       );
       if (categoryRes.rows[0]?.slug === STATUE_SLUG) {
-        await awardStatueCoins(donation);
+        await confirmStatueSeva(donation);
       }
     }
 
@@ -402,28 +393,31 @@ export const createAdminEntry = async (req, res) => {
 
     const isStatue = category.slug === STATUE_SLUG;
 
-    // Insert (empty proof — admin-recorded offline entry)
+    // Upload proof only after all validation passes so we never orphan S3 objects.
+    const paymentProofPath = req.file ? await uploadToS3(req.file.path, 'proofs') : '';
+
+    // Insert donation. statue_number is always NULL at insert; it is assigned at
+    // confirmation below (no gaps from rejected entries — see confirmStatueSeva).
     let donation;
     if (isStatue) {
-      donation = await insertStatueDonation({
-        userId,
-        categoryId,
-        amount,
-        paymentProofPath: '',
-        status,
-      });
+      const insertRes = await query(
+        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, statue_number, status)
+         VALUES ($1, $2, $3, $4, NULL, $5) RETURNING *`,
+        [userId, categoryId, amount, paymentProofPath, status]
+      );
+      donation = insertRes.rows[0];
     } else {
       const result = await query(
         `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, status)
-         VALUES ($1, $2, $3, '', $4) RETURNING *`,
-        [userId, categoryId, amount, status]
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [userId, categoryId, amount, paymentProofPath, status]
       );
       donation = result.rows[0];
     }
 
-    // Award coins immediately for a confirmed statue seva (mirrors reviewDonation)
+    // Assign seat number + award coins for a confirmed statue seva
     if (status === 'CONFIRMED' && isStatue) {
-      await awardStatueCoins(donation);
+      await confirmStatueSeva(donation);
     }
 
     await Promise.all([
@@ -438,6 +432,123 @@ export const createAdminEntry = async (req, res) => {
   } catch (err) {
     console.error('Admin create entry error:', err);
     res.status(500).json({ error: 'Failed to record seva entry' });
+  }
+};
+
+// --- Admin: roster of all statue numbers (1.5 Ft) ---
+// Returns every donation in the statue category that either has a number assigned
+// or is CONFIRMED (catches devotees who somehow ended up without a number so the
+// admin can use updateStatueNumber to fix them). Frontend derives gap rows from this.
+export const getStatueNumbers = async (_req, res) => {
+  try {
+    const result = await query(
+      `SELECT d.id AS donation_id, d.statue_number, d.status, d.created_at,
+              u.id AS user_id, u.full_name, u.email
+       FROM donations d
+       JOIN users u ON u.id = d.user_id
+       JOIN donation_categories dc ON dc.id = d.category_id
+       WHERE dc.slug = $1
+         AND (
+           d.statue_number IS NOT NULL
+           OR (
+             d.status = 'CONFIRMED'
+             AND d.statue_number IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM donations d2
+               WHERE d2.user_id = d.user_id
+                 AND d2.statue_number IS NOT NULL
+             )
+           )
+         )
+       ORDER BY d.statue_number ASC NULLS LAST, d.created_at ASC`,
+      [STATUE_SLUG]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get statue numbers error:', err);
+    res.status(500).json({ error: 'Failed to fetch statue numbers' });
+  }
+};
+
+// --- Admin: reassign / correct a statue number ---
+// PATCH /admin/statue-number/:donationId  body: { statueNumber }
+//
+// If the target number is free  → set it directly.
+// If the target number is taken → swap the two rows (src gets target, occupant gets
+//   src's old number). Swapping is safe whether or not a UNIQUE constraint exists
+//   because the three steps are wrapped in a single transaction.
+// If the target is taken AND src has no number → 409 (no number to give to the occupant).
+export const updateStatueNumber = async (req, res) => {
+  const donationId = parseInt(req.params.donationId);
+  const num = parseInt(req.body.statueNumber);
+
+  if (!Number.isInteger(num) || num < 1) {
+    return res.status(400).json({ error: 'statueNumber must be a positive integer' });
+  }
+
+  try {
+    await withTransaction(async (client) => {
+      // Lock + fetch the source donation
+      const srcRes = await client.query(
+        `SELECT d.id, d.statue_number, dc.slug
+         FROM donations d
+         JOIN donation_categories dc ON dc.id = d.category_id
+         WHERE d.id = $1
+         FOR UPDATE`,
+        [donationId]
+      );
+      const src = srcRes.rows[0];
+      if (!src) {
+        const err = new Error('Donation not found');
+        err.status = 404;
+        throw err;
+      }
+      if (src.slug !== STATUE_SLUG) {
+        const err = new Error('Not a 1.5 Ft statue donation');
+        err.status = 400;
+        throw err;
+      }
+      if (src.statue_number === num) {
+        return; // no-op: already correct
+      }
+
+      // Lock + fetch whoever currently holds the target number (if anyone)
+      const occupantRes = await client.query(
+        `SELECT id, statue_number FROM donations WHERE statue_number = $1 FOR UPDATE`,
+        [num]
+      );
+      const occupant = occupantRes.rows[0];
+
+      if (!occupant) {
+        // Target is free — simple set
+        await client.query(
+          `UPDATE donations SET statue_number = $1 WHERE id = $2`,
+          [num, donationId]
+        );
+      } else {
+        // Target is occupied — swap
+        const oldSrcNumber = src.statue_number;
+        if (oldSrcNumber === null) {
+          const err = new Error(
+            `#${num} is already assigned to another devotee. ` +
+            `This donation has no number to give in return — pick a free number instead.`
+          );
+          err.status = 409;
+          throw err;
+        }
+        // Three-step swap to avoid any intermediate duplicate
+        await client.query(`UPDATE donations SET statue_number = NULL WHERE id = $1`, [occupant.id]);
+        await client.query(`UPDATE donations SET statue_number = $1 WHERE id = $2`, [num, donationId]);
+        await client.query(`UPDATE donations SET statue_number = $1 WHERE id = $2`, [oldSrcNumber, occupant.id]);
+      }
+    });
+
+    await invalidateCache(CACHE_KEYS.GLOBAL_STATUE_COUNT);
+    res.json({ message: `Statue number updated to #${num}` });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('Update statue number error:', err);
+    res.status(500).json({ error: 'Failed to update statue number' });
   }
 };
 
