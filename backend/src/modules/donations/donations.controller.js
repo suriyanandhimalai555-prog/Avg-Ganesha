@@ -13,11 +13,11 @@ const CACHE_KEYS = {
 
 // AVG Coin reward config for the 1.5 Ft Statue donation.
 // Coins are locked (non-withdrawable) for 5 years from the donation purchase date.
-const STATUE_15FT_COIN_REWARD = 100;
+const STATUE_15FT_COIN_REWARD = 500;
 const STATUE_15FT_LOCK_YEARS = 5;
 const STATUE_SLUG = 'statue_1_5_ft';
 
-// Assign the statue seat number and award 100 AVG coins for a confirmed 1.5 Ft Statue
+// Assign the statue seat number and award 500 AVG coins for a confirmed 1.5 Ft Statue
 // donation, both inside a single transaction.
 //
 // Race-safety: we lock the user row (SELECT ... FOR UPDATE) as a per-user mutex.
@@ -49,7 +49,7 @@ async function confirmStatueSeva(donation) {
       );
     }
 
-    // Award 100 coins, once per devotee. The user-row lock above makes the
+    // Award 500 coins, once per devotee. The user-row lock above makes the
     // NOT EXISTS check atomic with the INSERT for the same user.
     await client.query(
       `INSERT INTO user_avg_coins
@@ -327,7 +327,7 @@ export const reviewDonation = async (req, res) => {
     }
 
     // On CONFIRMED 1.5 Ft Statue donation: assign a seat number (first time only)
-    // then award 100 AVG coins locked for 5 years from the purchase date (created_at).
+    // then award 500 AVG coins locked for 5 years from the purchase date (created_at).
     // Coin award is idempotent via UNIQUE(donation_id).
     if (status === 'CONFIRMED') {
       const donation = updateResult.rows[0];
@@ -356,7 +356,7 @@ export const reviewDonation = async (req, res) => {
 // --- Admin: record a seva/donation entry on behalf of a user ---
 // The admin picks a devotee + category + amount and records the seva directly
 // (e.g. offline cash/bank). Entries default to CONFIRMED and are indistinguishable
-// from user submissions: same statue-number assignment + 100-coin award for a
+// from user submissions: same statue-number assignment + 500-coin award for a
 // confirmed 1.5 Ft statue seva. No payment proof (stored as empty string).
 export const createAdminEntry = async (req, res) => {
   const userId = req.body.userId ?? req.body.user_id;

@@ -274,7 +274,7 @@ const AdminSevaEntry = () => {
           </select>
           {selectedCategory?.slug === 'statue_1_5_ft' && (
             <p className="text-[10px] text-[#FBDB8C]/60 mt-2 flex items-center gap-1.5 tracking-wide">
-              <HeartHandshake size={12} /> Confirmed 1.5 Ft statue seva awards 100 AVG coins on the devotee&apos;s <strong>first</strong> statue (locked 5 yrs).
+              <HeartHandshake size={12} /> Confirmed 1.5 Ft statue seva awards 500 AVG coins on the devotee&apos;s <strong>first</strong> statue (locked 5 yrs).
             </p>
           )}
         </div>

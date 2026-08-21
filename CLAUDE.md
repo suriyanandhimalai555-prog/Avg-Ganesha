@@ -9,7 +9,7 @@ This file orients any Claude session working in this repo. Read the **Production
 - **Devotees (role `USER`)** — register (usually via an **invite code**, forming a referral tree), complete **KYC** verification, browse **seva/donation** categories, submit donations with a payment proof, and track their contributions and **AVG coin** rewards.
 - **Admins (role `ADMIN`)** — manage devotees, review KYC, confirm/reject seva offerings, record seva on behalf of a devotee, view the invite tree, and configure the donation bank account — all from an **admin console**.
 
-The signature reward: donating the **1.5 Ft statue** seva earns **100 AVG coins**, locked (non-withdrawable) for **5 years**. No other seva earns coins.
+The signature reward: donating the **1.5 Ft statue** seva earns **500 AVG coins**, locked (non-withdrawable) for **5 years**. No other seva earns coins.
 
 ---
 
@@ -64,7 +64,7 @@ Monorepo with two apps: `backend/` (API) and `client/` (SPA).
 - **KYC lifecycle** — devotee uploads ID docs (S3) → `SUBMITTED` → admin `APPROVED`/`REJECTED` (with reason).
 - **donation_categories** — seva types; some have a fixed price (e.g. `statue_1_5_ft`, `statue_250_ft`) sourced from `system_settings`.
 - **donations** — `user_id`, `category_id`, `amount`, `payment_proof_path`, `statue_number`, `status` (`PENDING` | `CONFIRMED` | `REJECTED`), `rejection_reason`. Statue seva assigns a `statue_number` from `statue_number_seq` on a devotee's **first** statue donation.
-- **user_avg_coins** — AVG coin ledger, `UNIQUE(donation_id)` for idempotency. **Coins are credited only for `slug='statue_1_5_ft'` on a CONFIRMED donation** — 100 coins, locked 5 years from purchase date. See `awardStatueCoins()` in `backend/src/modules/donations/donations.controller.js`; enforced identically in `reviewDonation`, `createAdminEntry`, and the `initDb` backfill.
+- **user_avg_coins** — AVG coin ledger, `UNIQUE(donation_id)` for idempotency. **Coins are credited only for `slug='statue_1_5_ft'` on a CONFIRMED donation** — 500 coins, locked 5 years from purchase date. See `awardStatueCoins()` in `backend/src/modules/donations/donations.controller.js`; enforced identically in `reviewDonation`, `createAdminEntry`, and the `initDb` backfill.
 - **system_settings** — key/value store; holds the donation bank account details shown to devotees and the statue prices.
 
 ---

@@ -24,14 +24,15 @@ export const initDb = async () => {
     await query(`CREATE INDEX IF NOT EXISTS idx_user_avg_coins_user_id ON user_avg_coins(user_id);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_user_avg_coins_locked_until ON user_avg_coins(locked_until);`);
 
-    // Backfill: award 100 AVG coins for the EARLIEST confirmed 1.5 Ft Statue donation
+    // Backfill: award 500 AVG coins for the EARLIEST confirmed 1.5 Ft Statue donation
     // per devotee. Skips devotees who already have a coin row. Idempotent via UNIQUE(donation_id).
     // Uses DISTINCT ON to select one row per user (the earliest confirmed statue donation).
+    // NOTE: keep this literal in sync with STATUE_15FT_COIN_REWARD in donations.controller.js.
     const backfill = await query(`
       INSERT INTO user_avg_coins
         (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
       SELECT DISTINCT ON (d.user_id)
-             d.user_id, d.id, 100, 'STATUE_1_5_FT_DONATION', d.created_at,
+             d.user_id, d.id, 500, 'STATUE_1_5_FT_DONATION', d.created_at,
              d.created_at + INTERVAL '5 years', FALSE
       FROM donations d
       JOIN donation_categories dc ON dc.id = d.category_id
