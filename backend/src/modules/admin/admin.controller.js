@@ -83,9 +83,11 @@ export const getAllUsers = async (req, res) => {
     const dataQuery = `
       SELECT u.id, u.full_name, u.email, u.phone_number, u.role, u.invite_code, u.invite_count, u.kyc_status, u.created_at,
              inviter.full_name as invited_by_name,
+             kyc_rev.full_name as kyc_reviewed_by_name,
              u.details->'kyc_docs' as kyc_docs
       FROM users u
       LEFT JOIN users inviter ON u.invited_by = inviter.id
+      LEFT JOIN users kyc_rev ON u.kyc_reviewed_by = kyc_rev.id
       ${whereClause}
       ORDER BY u.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -135,9 +137,9 @@ export const getAllUsers = async (req, res) => {
 export const updateUserRole = async (req, res) => {
   const { userId, role } = req.body;
 
-  // Only allow valid roles: USER, ADMIN
-  if (!['USER', 'ADMIN'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role. Must be USER or ADMIN.' });
+  // Only allow valid roles: USER, ADMIN, STAFF (STAFF = console operator, see authorizeRole)
+  if (!['USER', 'ADMIN', 'STAFF'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role. Must be USER, ADMIN or STAFF.' });
   }
 
   try {
@@ -166,8 +168,8 @@ export const adminReviewKYC = async (req, res) => {
 
   try {
     await query(
-      'UPDATE users SET kyc_status = $1, kyc_rejection_reason = $2, updated_at = NOW() WHERE id = $3',
-      [status, status === 'REJECTED' ? rejectionReason || null : null, userId]
+      'UPDATE users SET kyc_status = $1, kyc_rejection_reason = $2, kyc_reviewed_by = $3, updated_at = NOW() WHERE id = $4',
+      [status, status === 'REJECTED' ? rejectionReason || null : null, req.user.id, userId]
     );
 
     // Invalidate admin stats cache

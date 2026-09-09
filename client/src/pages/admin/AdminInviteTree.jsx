@@ -321,6 +321,11 @@ const TreeNode = ({ node, depth, collapsed, toggle, visibleIds, matchIds, search
                 <Crown size={10} /> Admin
               </span>
             )}
+            {node.role === 'STAFF' && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-sky-300 bg-sky-500/10 border border-sky-400/20 rounded px-1.5 py-0.5">
+                Staff
+              </span>
+            )}
             {node.invite_code && (
               <span className="text-[10px] font-mono text-[#FBDB8C]/70 bg-[#FBDB8C]/5 border border-[#FBDB8C]/10 rounded px-1.5 py-0.5">
                 {node.invite_code}

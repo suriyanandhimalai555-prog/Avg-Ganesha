@@ -24,6 +24,9 @@ import DonatePage from './pages/DonatePage';
 import HelpPage from './pages/HelpPage';
 import ProfilePage from './pages/ProfilePage';
 
+// Roles that operate the admin console (real admin + data-entry staff).
+const CONSOLE_ROLES = ['ADMIN', 'STAFF'];
+
 // Protects routes that require login + optionally a specific role
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, token } = useSelector((state) => state.auth);
@@ -33,7 +36,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
+    if (CONSOLE_ROLES.includes(user.role)) return <Navigate to="/admin" replace />;
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -59,7 +62,7 @@ function AppContent() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={CONSOLE_ROLES}>
             <AdminLayout />
           </ProtectedRoute>
         }
@@ -104,7 +107,7 @@ function AppContent() {
           path="/"
           element={
             token && user
-              ? user.role === 'ADMIN'
+              ? CONSOLE_ROLES.includes(user.role)
                 ? <Navigate to="/admin" replace />
                 : <Navigate to="/dashboard" replace />
               : <Navigate to="/donate" replace />

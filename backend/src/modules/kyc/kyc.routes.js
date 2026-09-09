@@ -48,6 +48,6 @@ router.post('/submit',
   upload.fields([{ name: 'idFront', maxCount: 1 }, { name: 'idBack', maxCount: 1 }]), 
   submitKYC
 );
-router.post('/review', authenticateToken, authorizeRole('ADMIN'), reviewKYC);
+router.post('/review', authenticateToken, authorizeRole('ADMIN', 'STAFF'), reviewKYC);
 
 export default router;

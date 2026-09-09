@@ -19,6 +19,9 @@ if (isProduction && (!jwtSecret || jwtSecret === JWT_PLACEHOLDER || jwtSecret.le
 export const ROLES = Object.freeze({
   ADMIN: 'ADMIN',
   USER: 'USER',
+  // STAFF: console operator (data entry) — admin console access minus god-powers
+  // (no role changes / settings / plan-price edits). See authorizeRole usage.
+  STAFF: 'STAFF',
 });
 
 export const authConfig = Object.freeze({

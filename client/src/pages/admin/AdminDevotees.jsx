@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import {
   Calendar,
   Mail,
@@ -26,6 +27,8 @@ import {
 const KYC_FILTERS = ['ALL', 'SUBMITTED', 'APPROVED', 'REJECTED', 'PENDING'];
 
 const AdminDevotees = () => {
+  const currentUser = useSelector((state) => state.auth.user);
+  const isAdmin = currentUser?.role === 'ADMIN'; // only real admins may change roles
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = (searchParams.get('filter') || 'ALL').toUpperCase();
   const initialSearch = searchParams.get('q') || '';
@@ -236,7 +239,11 @@ const AdminDevotees = () => {
                     <td className="px-4 md:px-8 py-4 md:py-6 whitespace-nowrap">
                       <span
                         className={`${adminStyles.roleBase} ${
-                          u.role === 'ADMIN' ? adminStyles.roleAdmin : adminStyles.roleUser
+                          u.role === 'ADMIN'
+                            ? adminStyles.roleAdmin
+                            : u.role === 'STAFF'
+                            ? adminStyles.roleStaff
+                            : adminStyles.roleUser
                         }`}
                       >
                         {u.role}
@@ -261,6 +268,11 @@ const AdminDevotees = () => {
                         {u.kyc_status === 'APPROVED' ? <CheckCircle size={10} /> : <Clock size={10} />}
                         {u.kyc_status || 'PENDING'}
                       </span>
+                      {u.kyc_reviewed_by_name && (
+                        <div className="mt-1.5 text-[9px] text-white/25 font-bold tracking-wide">
+                          by {u.kyc_reviewed_by_name}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 md:px-8 py-4 md:py-6 whitespace-nowrap text-[10px] text-white/30 font-bold uppercase tracking-widest">
                       {u.invited_by_name || <span className="opacity-20">—</span>}
@@ -302,6 +314,22 @@ const AdminDevotees = () => {
                               ✗ Reject
                             </button>
                           </div>
+                        )}
+                        {/* Role assignment — ADMIN only (a god-power STAFF must never have).
+                            This is how you promote a devotee to STAFF. */}
+                        {isAdmin && u.id !== currentUser?.id && (
+                          <select
+                            value={u.role}
+                            onChange={(e) =>
+                              e.target.value !== u.role && openActionModal('ROLE', u.id, e.target.value)
+                            }
+                            title="Change role"
+                            className="text-[9px] w-full px-2 py-2 bg-white/5 text-white/60 border border-white/10 rounded-lg font-black uppercase tracking-widest hover:bg-white/10 hover:text-white outline-none cursor-pointer transition-all"
+                          >
+                            <option value="USER">Role: User</option>
+                            <option value="STAFF">Role: Staff</option>
+                            <option value="ADMIN">Role: Admin</option>
+                          </select>
                         )}
                       </div>
                     </td>
@@ -477,6 +505,7 @@ const AdminDevotees = () => {
 
       <ActionConfirmModal
         isOpen={actionModal.isOpen}
+        actionType={actionModal.actionType}
         targetStatus={actionModal.targetStatus}
         reason={actionReason}
         onReasonChange={setActionReason}

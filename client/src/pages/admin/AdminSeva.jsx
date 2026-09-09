@@ -215,6 +215,12 @@ const AdminSeva = () => {
                         {d.status === 'CONFIRMED' ? <CheckCircle size={10} /> : <Clock size={10} />}
                         {d.status || 'PENDING'}
                       </span>
+                      {(d.recorded_by_name || d.reviewed_by_name) && (
+                        <div className="mt-1.5 space-y-0.5 text-[9px] text-white/25 font-bold tracking-wide">
+                          {d.recorded_by_name && <div>entered by {d.recorded_by_name}</div>}
+                          {d.reviewed_by_name && <div>reviewed by {d.reviewed_by_name}</div>}
+                        </div>
+                      )}
                     </td>
                     <td className={commonStyles.tableCell}>
                       {d.payment_proof_path ? (

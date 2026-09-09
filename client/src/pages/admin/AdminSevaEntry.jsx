@@ -214,14 +214,20 @@ const AdminSevaEntry = () => {
             </div>
           ) : (
             <div className="relative">
+              {/* name + autoComplete="new-password" stop Chrome from covering the devotee
+                  list with saved-email autofill — Chrome ignores autoComplete="off" on any
+                  field it classifies as email (our placeholder contains the word "email"). */}
               <input
                 type="text"
+                name="devotee-search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => results.length && setShowResults(true)}
                 placeholder="Search by name, email or code…"
                 className={commonStyles.input + ' pl-11'}
-                autoComplete="off"
+                autoComplete="new-password"
+                data-1p-ignore="true"
+                data-lpignore="true"
               />
               <Search className="w-4 h-4 text-[#FBDB8C]/40 absolute left-4 top-1/2 -translate-y-1/2" />
 
@@ -274,7 +280,7 @@ const AdminSevaEntry = () => {
           </select>
           {selectedCategory?.slug === 'statue_1_5_ft' && (
             <p className="text-[10px] text-[#FBDB8C]/60 mt-2 flex items-center gap-1.5 tracking-wide">
-              <HeartHandshake size={12} /> Confirmed 1.5 Ft statue seva awards 500 AVG coins on the devotee&apos;s <strong>first</strong> statue (locked 5 yrs).
+              <HeartHandshake size={12} /> Confirmed 1.5 Ft statue seva awards <strong>100 AVG coins</strong> on the devotee&apos;s <strong>first</strong> statue (locked 5 yrs). <span className="opacity-60">500-coin promotional rate was up to 7 Sep 2026.</span>
             </p>
           )}
         </div>

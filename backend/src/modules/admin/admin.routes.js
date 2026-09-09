@@ -46,13 +46,15 @@ const kycUpload = multer({
   fileFilter: kycFileFilter,
 });
 
-// All admin routes require login + ADMIN role
-router.use(authenticateToken, authorizeRole('ADMIN'));
+// Console routes: ADMIN + STAFF (data-entry operator). God-power routes below
+// re-guard themselves with authorizeRole('ADMIN') so STAFF can't reach them.
+router.use(authenticateToken, authorizeRole('ADMIN', 'STAFF'));
 
 router.get('/stats', getAdminStats);
 router.get('/users', getAllUsers);
 router.get('/invite-tree', getInviteTree);
-router.post('/role', updateUserRole);
+// Role changes are ADMIN-only (STAFF must not be able to promote accounts).
+router.post('/role', authorizeRole('ADMIN'), updateUserRole);
 router.post('/kyc-review', adminReviewKYC);
 router.post(
   '/kyc-submit',

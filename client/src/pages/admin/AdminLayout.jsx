@@ -111,6 +111,7 @@ const NAV_GROUPS = [
         to: '/admin/settings',
         label: 'Settings',
         Icon: Settings,
+        adminOnly: true, // bank/settings edits are a god-power — hide from STAFF
         match: ({ pathname }) => pathname.startsWith('/admin/settings'),
       },
     ],
@@ -170,14 +171,24 @@ const AdminLayout = () => {
   const filter = (searchParams.get('filter') || '').toUpperCase();
   const routeCtx = { pathname: location.pathname, filter };
 
+  // STAFF sees the console minus god-power items (e.g. Settings). Drop admin-only
+  // items — and any group left empty — for non-admins.
+  const isAdmin = user?.role === 'ADMIN';
+  const navGroups = useMemo(() => {
+    if (isAdmin) return NAV_GROUPS;
+    return NAV_GROUPS
+      .map((group) => ({ ...group, items: group.items.filter((it) => !it.adminOnly) }))
+      .filter((group) => group.items.length > 0);
+  }, [isAdmin]);
+
   const activeItem = useMemo(() => {
-    for (const group of NAV_GROUPS) {
+    for (const group of navGroups) {
       const found = group.items.find((it) => it.match(routeCtx));
       if (found) return found;
     }
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, filter]);
+  }, [location.pathname, filter, navGroups]);
 
   const pageTitle = activeItem?.label || 'Admin';
 
@@ -226,7 +237,7 @@ const AdminLayout = () => {
 
         {/* Nav groups */}
         <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-5 space-y-6">
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label}>
               <p className="px-3 mb-2 text-[9px] font-black text-[#FBDB8C]/30 uppercase tracking-[0.3em]">
                 {group.label}
@@ -271,8 +282,8 @@ const AdminLayout = () => {
               {user?.full_name?.charAt(0).toUpperCase() || 'A'}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-white truncate">{user?.full_name || 'Administrator'}</p>
-              <p className="text-[10px] text-[#FBDB8C]/50 uppercase tracking-widest font-bold">Admin</p>
+              <p className="text-xs font-bold text-white truncate">{user?.full_name || user?.fullName || 'Operator'}</p>
+              <p className="text-[10px] text-[#FBDB8C]/50 uppercase tracking-widest font-bold">{user?.role || 'ADMIN'}</p>
             </div>
           </div>
           <button

@@ -24,15 +24,24 @@ export const initDb = async () => {
     await query(`CREATE INDEX IF NOT EXISTS idx_user_avg_coins_user_id ON user_avg_coins(user_id);`);
     await query(`CREATE INDEX IF NOT EXISTS idx_user_avg_coins_locked_until ON user_avg_coins(locked_until);`);
 
-    // Backfill: award 500 AVG coins for the EARLIEST confirmed 1.5 Ft Statue donation
-    // per devotee. Skips devotees who already have a coin row. Idempotent via UNIQUE(donation_id).
+    // Attribution: stamp WHO performed console actions, so a mistake can be traced to a
+    // specific ADMIN or STAFF operator. ON DELETE SET NULL — removing the operator must
+    // never cascade-delete the donation/user it points at.
+    await query(`ALTER TABLE donations ADD COLUMN IF NOT EXISTS recorded_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+    await query(`ALTER TABLE donations ADD COLUMN IF NOT EXISTS reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+
+    // Backfill: award 100 AVG coins for the EARLIEST confirmed 1.5 Ft Statue donation per
+    // devotee who has no coin row yet. Idempotent via UNIQUE(donation_id) + NOT EXISTS.
     // Uses DISTINCT ON to select one row per user (the earliest confirmed statue donation).
     // NOTE: keep this literal in sync with STATUE_15FT_COIN_REWARD in donations.controller.js.
+    // Historical context: the 500-coin promotional rate applied to seva up to 7 Sep 2026;
+    // existing 500-coin rows for that cohort are preserved and NOT touched here.
     const backfill = await query(`
       INSERT INTO user_avg_coins
         (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
       SELECT DISTINCT ON (d.user_id)
-             d.user_id, d.id, 500, 'STATUE_1_5_FT_DONATION', d.created_at,
+             d.user_id, d.id, 100, 'STATUE_1_5_FT_DONATION', d.created_at,
              d.created_at + INTERVAL '5 years', FALSE
       FROM donations d
       JOIN donation_categories dc ON dc.id = d.category_id

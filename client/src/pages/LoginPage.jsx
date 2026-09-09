@@ -22,7 +22,7 @@ const LoginPage = () => {
     if (token && user) {
       if (redirectParams) {
         navigate(redirectParams, { replace: true });
-      } else if (user.role === 'ADMIN') {
+      } else if (['ADMIN', 'STAFF'].includes(user.role)) {
         navigate('/admin', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });

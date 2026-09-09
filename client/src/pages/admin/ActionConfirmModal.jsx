@@ -6,6 +6,7 @@ import { commonStyles, adminStyles } from '../../styles/index.styles';
  */
 const ActionConfirmModal = ({
   isOpen,
+  actionType = 'KYC',
   targetStatus,
   reason,
   onReasonChange,
@@ -15,6 +16,7 @@ const ActionConfirmModal = ({
 }) => {
   if (!isOpen) return null;
 
+  const isRole = actionType === 'ROLE';
   const isReject = targetStatus === 'REJECTED';
   const confirmBtnClass = isReject ? adminStyles.actionBtnReject : adminStyles.actionBtnApprove;
 
@@ -28,10 +30,14 @@ const ActionConfirmModal = ({
           Confirm Action
         </h3>
         <p className="text-sm text-white/60 mb-6">
-          Are you sure you want to <strong>{isReject ? 'REJECT' : 'APPROVE'}</strong> this?
+          {isRole ? (
+            <>Set this devotee's role to <strong>{targetStatus}</strong>?</>
+          ) : (
+            <>Are you sure you want to <strong>{isReject ? 'REJECT' : 'APPROVE'}</strong> this?</>
+          )}
         </p>
 
-        {isReject && (
+        {isReject && !isRole && (
           <div className="mb-6 space-y-2">
             <label className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em]">
               Rejection Reason (Optional)

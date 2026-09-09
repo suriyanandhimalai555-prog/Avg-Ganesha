@@ -243,14 +243,20 @@ const AdminKycEntry = () => {
             </div>
           ) : (
             <div className="relative">
+              {/* name + autoComplete="new-password" stop Chrome from covering the devotee
+                  list with saved-email autofill — Chrome ignores autoComplete="off" on any
+                  field it classifies as email (our placeholder contains the word "email"). */}
               <input
                 type="text"
+                name="devotee-search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => results.length && setShowResults(true)}
                 placeholder="Search by name, email or code…"
                 className={commonStyles.input + ' pl-11'}
-                autoComplete="off"
+                autoComplete="new-password"
+                data-1p-ignore="true"
+                data-lpignore="true"
               />
               <Search className="w-4 h-4 text-[#FBDB8C]/40 absolute left-4 top-1/2 -translate-y-1/2" />
 

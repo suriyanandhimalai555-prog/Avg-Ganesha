@@ -130,6 +130,7 @@ export const adminStyles = {
   // Roles
   roleBase: "inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-[0.2em] border",
   roleAdmin: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  roleStaff: "bg-sky-500/10 text-sky-400 border-sky-500/20",
   roleUser: "bg-white/5 text-white/40 border-white/10",
   
   // Action Buttons

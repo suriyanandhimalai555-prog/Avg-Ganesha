@@ -63,10 +63,11 @@ router.get('/my', authenticateToken, getMyDonations);
 router.get('/my-stats', authenticateToken, getMyDonationStats);
 router.get('/my-coins', authenticateToken, getMyCoins);
 
-router.get('/admin/pending', authenticateToken, authorizeRole('ADMIN'), getPendingDonations);
-router.post('/admin/review/:donationId', authenticateToken, authorizeRole('ADMIN'), reviewDonation);
-router.post('/admin/entry', authenticateToken, authorizeRole('ADMIN'), upload.single('paymentProof'), createAdminEntry);
-router.get('/admin/statue-numbers', authenticateToken, authorizeRole('ADMIN'), getStatueNumbers);
-router.patch('/admin/statue-number/:donationId', authenticateToken, authorizeRole('ADMIN'), updateStatueNumber);
+// Console operations — ADMIN and STAFF (data-entry operator). God-powers stay ADMIN-only elsewhere.
+router.get('/admin/pending', authenticateToken, authorizeRole('ADMIN', 'STAFF'), getPendingDonations);
+router.post('/admin/review/:donationId', authenticateToken, authorizeRole('ADMIN', 'STAFF'), reviewDonation);
+router.post('/admin/entry', authenticateToken, authorizeRole('ADMIN', 'STAFF'), upload.single('paymentProof'), createAdminEntry);
+router.get('/admin/statue-numbers', authenticateToken, authorizeRole('ADMIN', 'STAFF'), getStatueNumbers);
+router.patch('/admin/statue-number/:donationId', authenticateToken, authorizeRole('ADMIN', 'STAFF'), updateStatueNumber);
 
 export default router;
