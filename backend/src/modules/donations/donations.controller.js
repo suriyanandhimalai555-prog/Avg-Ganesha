@@ -11,12 +11,25 @@ const CACHE_KEYS = {
   ADMIN_STATS: 'admin:stats'
 };
 
-// AVG Coin reward for the 1.5 Ft Statue seva: 100 AVG coins (the 500-coin rate was
-// a promotional offer applied to seva up to 7 Sep 2026; 100 coins from 8 Sep 2026 onward).
+// AVG Coin reward for the 1.5 Ft Statue seva.
+// Promotional rate: 500 coins for seva purchased up to 7 Sep 2026 (inclusive).
+// Standard rate   : 100 coins from 8 Sep 2026 onward.
 // Coins are locked (non-withdrawable) for 5 years from the donation purchase date.
-const STATUE_15FT_COIN_REWARD = 100;
+const STATUE_15FT_COIN_REWARD       = 100;          // standard rate (8 Sep 2026 onward)
+const STATUE_15FT_COIN_REWARD_PROMO = 500;          // promotional rate (up to 7 Sep 2026)
+const STATUE_COIN_CUTOFF            = '2026-09-08'; // first day of the 100-coin standard rate
 const STATUE_15FT_LOCK_YEARS = 5;
 const STATUE_SLUG = 'statue_1_5_ft';
+
+// Return the correct coin reward based on the donation's purchase date (created_at).
+// Seva purchased before the cutoff (on/before 7 Sep 2026) → 500; from 8 Sep 2026 → 100.
+// Both date-only strings ("YYYY-MM-DD") and full ISO timestamps are handled correctly
+// because JS parses date-only strings as UTC midnight, consistent with our cutoff constant.
+function statueCoinReward(purchaseDate) {
+  return new Date(purchaseDate) < new Date(STATUE_COIN_CUTOFF)
+    ? STATUE_15FT_COIN_REWARD_PROMO
+    : STATUE_15FT_COIN_REWARD;
+}
 
 // Assign the statue seat number and award 100 AVG coins for a confirmed 1.5 Ft Statue
 // donation, both inside a single transaction.
@@ -50,8 +63,8 @@ async function confirmStatueSeva(donation) {
       );
     }
 
-    // Award 100 coins, once per devotee. The user-row lock above makes the
-    // NOT EXISTS check atomic with the INSERT for the same user.
+    // Award coins (500 for seva up to 7 Sep 2026, 100 from 8 Sep onward), once per devotee.
+    // The user-row lock above makes the NOT EXISTS check atomic with the INSERT for the same user.
     await client.query(
       `INSERT INTO user_avg_coins
          (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
@@ -62,7 +75,7 @@ async function confirmStatueSeva(donation) {
          WHERE user_id = $1 AND source = 'STATUE_1_5_FT_DONATION'
        )
        ON CONFLICT (donation_id) DO NOTHING`,
-      [donation.user_id, donation.id, STATUE_15FT_COIN_REWARD, donation.created_at, STATUE_15FT_LOCK_YEARS]
+      [donation.user_id, donation.id, statueCoinReward(donation.created_at), donation.created_at, STATUE_15FT_LOCK_YEARS]
     );
   });
 }
@@ -368,6 +381,9 @@ export const createAdminEntry = async (req, res) => {
   const amount = parseFloat(req.body.amount);
   const status = (req.body.status || 'CONFIRMED').toUpperCase();
   const actorId = req.user.id; // ADMIN or STAFF who recorded this entry (attribution)
+  // Optional backdated seva date (YYYY-MM-DD). When supplied, overrides created_at so the
+  // entry is stamped with the actual seva date and earns the correct coin reward (500 vs 100).
+  const rawDate = req.body.purchaseDate || req.body.date || null;
 
   try {
     if (!userId || !categoryId) {
@@ -378,6 +394,19 @@ export const createAdminEntry = async (req, res) => {
     }
     if (!['CONFIRMED', 'PENDING'].includes(status)) {
       return res.status(400).json({ error: "status must be CONFIRMED or PENDING" });
+    }
+
+    // Validate optional purchase date — must be a valid date and not in the future.
+    let purchaseDateTs = null;
+    if (rawDate) {
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) {
+        return res.status(400).json({ error: 'Invalid purchaseDate — use YYYY-MM-DD.' });
+      }
+      if (d > new Date()) {
+        return res.status(400).json({ error: 'purchaseDate cannot be in the future.' });
+      }
+      purchaseDateTs = d.toISOString(); // stored as UTC midnight of the chosen calendar date
     }
 
     // Validate devotee exists
@@ -403,19 +432,25 @@ export const createAdminEntry = async (req, res) => {
 
     // Insert donation. statue_number is always NULL at insert; it is assigned at
     // confirmation below (no gaps from rejected entries — see confirmStatueSeva).
+    // When purchaseDateTs is provided, it is written into created_at so the backdated
+    // entry earns the correct coin reward and has the correct 5-year lock window.
+    const extraCols  = purchaseDateTs ? ', created_at'      : '';
+    const extraParam = purchaseDateTs ? ', $7::timestamptz' : '';
+    const extraVals  = purchaseDateTs ? [purchaseDateTs]    : [];
+
     let donation;
     if (isStatue) {
       const insertRes = await query(
-        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, statue_number, status, recorded_by)
-         VALUES ($1, $2, $3, $4, NULL, $5, $6) RETURNING *`,
-        [userId, categoryId, amount, paymentProofPath, status, actorId]
+        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, statue_number, status, recorded_by${extraCols})
+         VALUES ($1, $2, $3, $4, NULL, $5, $6${extraParam}) RETURNING *`,
+        [userId, categoryId, amount, paymentProofPath, status, actorId, ...extraVals]
       );
       donation = insertRes.rows[0];
     } else {
       const result = await query(
-        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, status, recorded_by)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [userId, categoryId, amount, paymentProofPath, status, actorId]
+        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, status, recorded_by${extraCols})
+         VALUES ($1, $2, $3, $4, $5, $6${extraParam}) RETURNING *`,
+        [userId, categoryId, amount, paymentProofPath, status, actorId, ...extraVals]
       );
       donation = result.rows[0];
     }

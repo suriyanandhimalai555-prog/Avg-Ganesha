@@ -11,6 +11,7 @@ import {
   Clock,
   Paperclip,
   Image as ImageIcon,
+  CalendarDays,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { API_ROUTES } from '../../config/api';
@@ -44,6 +45,7 @@ const AdminSevaEntry = () => {
   // Form
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('CONFIRMED');
+  const [purchaseDate, setPurchaseDate] = useState(''); // optional — defaults to today server-side
   const [paymentProof, setPaymentProof] = useState(null); // optional File object
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success'|'error', text }
@@ -125,6 +127,16 @@ const AdminSevaEntry = () => {
     }
   };
 
+  // Today as YYYY-MM-DD (used as the max= bound on the date picker).
+  const todayStr = new Date().toISOString().slice(0, 10);
+  // Coin reward for the 1.5 Ft statue seva depends on the selected seva date.
+  // Promo rate: 500 coins for seva on/before 7 Sep 2026; standard: 100 coins from 8 Sep 2026.
+  const STATUE_COIN_CUTOFF = '2026-09-08';
+  const effectiveCoinReward =
+    (purchaseDate ? new Date(purchaseDate) : new Date()) < new Date(STATUE_COIN_CUTOFF)
+      ? 500
+      : 100;
+
   const canSubmit =
     selectedUser && categoryId && parseFloat(amount) > 0 && !submitting;
 
@@ -140,6 +152,7 @@ const AdminSevaEntry = () => {
       formData.append('categoryId', Number(categoryId));
       formData.append('amount', parseFloat(amount));
       formData.append('status', status);
+      if (purchaseDate) formData.append('purchaseDate', purchaseDate);
       if (paymentProof) formData.append('paymentProof', paymentProof);
 
       const res = await api.post(API_ROUTES.DONATIONS.ADMIN_ENTRY, formData, {
@@ -156,6 +169,7 @@ const AdminSevaEntry = () => {
       setCategoryId('');
       setAmount('');
       setStatus('CONFIRMED');
+      setPurchaseDate('');
       setPaymentProof(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       // Refresh sidebar/overview counts via AdminLayout context (avoids double-fetch
@@ -279,8 +293,14 @@ const AdminSevaEntry = () => {
             ))}
           </select>
           {selectedCategory?.slug === 'statue_1_5_ft' && (
-            <p className="text-[10px] text-[#FBDB8C]/60 mt-2 flex items-center gap-1.5 tracking-wide">
-              <HeartHandshake size={12} /> Confirmed 1.5 Ft statue seva awards <strong>100 AVG coins</strong> on the devotee&apos;s <strong>first</strong> statue (locked 5 yrs). <span className="opacity-60">500-coin promotional rate was up to 7 Sep 2026.</span>
+            <p className="text-[10px] text-[#FBDB8C]/60 mt-2 flex items-center gap-1.5 tracking-wide flex-wrap">
+              <HeartHandshake size={12} className="flex-shrink-0" />
+              Confirmed 1.5 Ft statue seva awards{' '}
+              <strong>{effectiveCoinReward} AVG coins</strong> on the devotee&apos;s{' '}
+              <strong>first</strong> statue (locked 5 yrs from seva date).
+              {effectiveCoinReward === 500 && (
+                <span className="opacity-70 ml-0.5">Promotional rate — seva dated on/before 7 Sep 2026.</span>
+              )}
             </p>
           )}
         </div>
@@ -300,6 +320,26 @@ const AdminSevaEntry = () => {
               className={commonStyles.input + ' pl-11 tabular-nums'}
             />
           </div>
+        </div>
+
+        {/* Seva Date (optional — for backdating offline payments) */}
+        <div>
+          <label className={commonStyles.label}>
+            Seva Date <span className="normal-case text-white/20 font-medium tracking-normal">— optional, defaults to today</span>
+          </label>
+          <div className="relative">
+            <CalendarDays className="w-4 h-4 text-[#FBDB8C]/40 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="date"
+              value={purchaseDate}
+              max={todayStr}
+              onChange={(e) => setPurchaseDate(e.target.value)}
+              className={commonStyles.input + ' pl-11 [color-scheme:dark]'}
+            />
+          </div>
+          <p className="text-[10px] text-white/30 mt-1.5 tracking-wide">
+            Leave blank to stamp today. Seva dated on/before 7 Sep 2026 earns the 500-coin promo rate.
+          </p>
         </div>
 
         {/* Payment proof (optional) */}
