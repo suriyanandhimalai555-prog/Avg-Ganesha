@@ -51,6 +51,11 @@ const AdminSevaEntry = () => {
   const [feedback, setFeedback] = useState(null); // { type: 'success'|'error', text }
   const fileInputRef = useRef(null);
 
+  // AVG coins for the 1.5 Ft statue seva — admin-editable, prefilled with the auto rate.
+  // '' = unset; '0' = assign seat but no coins; any positive int = that many coins.
+  const [coins, setCoins] = useState('');
+  const [coinsEdited, setCoinsEdited] = useState(false); // true once admin manually types
+
   const selectedCategory = useMemo(
     () => categories.find((c) => String(c.id) === String(categoryId)) || null,
     [categories, categoryId]
@@ -106,6 +111,25 @@ const AdminSevaEntry = () => {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
+  // Sync the coin pre-fill whenever the category or seva date changes — but only until
+  // the admin manually edits the field (coinsEdited). Once they type, stop overwriting.
+  // effectiveCoinReward is derived below; this effect captures it on each render.
+  const STATUE_COIN_CUTOFF = '2026-09-08';
+  const effectiveCoinReward =
+    (purchaseDate ? new Date(purchaseDate) : new Date()) < new Date(STATUE_COIN_CUTOFF)
+      ? 500
+      : 100;
+
+  useEffect(() => {
+    if (selectedCategory?.slug === 'statue_1_5_ft' && !coinsEdited) {
+      setCoins(String(effectiveCoinReward));
+    } else if (selectedCategory?.slug !== 'statue_1_5_ft') {
+      // Clear coin override when switching away from the statue category.
+      setCoins('');
+      setCoinsEdited(false);
+    }
+  }, [selectedCategory?.slug, effectiveCoinReward, coinsEdited]);
+
   const pickUser = (u) => {
     setSelectedUser(u);
     setShowResults(false);
@@ -118,24 +142,19 @@ const AdminSevaEntry = () => {
     setSearch('');
   };
 
-  // Prefill amount when a fixed-price category is chosen
+  // Prefill amount when a fixed-price category is chosen.
+  // Reset coinsEdited so the pre-fill effect syncs the coin field for the new category.
   const onCategoryChange = (id) => {
     setCategoryId(id);
     const cat = categories.find((c) => String(c.id) === String(id));
     if (cat?.hasFixedPrice && cat.fixedPrice) {
       setAmount(String(cat.fixedPrice));
     }
+    setCoinsEdited(false);
   };
 
   // Today as YYYY-MM-DD (used as the max= bound on the date picker).
   const todayStr = new Date().toISOString().slice(0, 10);
-  // Coin reward for the 1.5 Ft statue seva depends on the selected seva date.
-  // Promo rate: 500 coins for seva on/before 7 Sep 2026; standard: 100 coins from 8 Sep 2026.
-  const STATUE_COIN_CUTOFF = '2026-09-08';
-  const effectiveCoinReward =
-    (purchaseDate ? new Date(purchaseDate) : new Date()) < new Date(STATUE_COIN_CUTOFF)
-      ? 500
-      : 100;
 
   const canSubmit =
     selectedUser && categoryId && parseFloat(amount) > 0 && !submitting;
@@ -154,6 +173,11 @@ const AdminSevaEntry = () => {
       formData.append('status', status);
       if (purchaseDate) formData.append('purchaseDate', purchaseDate);
       if (paymentProof) formData.append('paymentProof', paymentProof);
+      // Send the admin-selected coin amount for statue seva (confirmed only).
+      // The backend ignores `coins` for non-statue categories.
+      if (selectedCategory?.slug === 'statue_1_5_ft' && status === 'CONFIRMED') {
+        formData.append('coins', coins === '' ? 0 : parseInt(coins, 10));
+      }
 
       const res = await api.post(API_ROUTES.DONATIONS.ADMIN_ENTRY, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -171,6 +195,8 @@ const AdminSevaEntry = () => {
       setStatus('CONFIRMED');
       setPurchaseDate('');
       setPaymentProof(null);
+      setCoins('');
+      setCoinsEdited(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
       // Refresh sidebar/overview counts via AdminLayout context (avoids double-fetch
       // that would occur if we also dispatched the 'admin:refresh-stats' event here,
@@ -292,16 +318,34 @@ const AdminSevaEntry = () => {
               </option>
             ))}
           </select>
-          {selectedCategory?.slug === 'statue_1_5_ft' && (
-            <p className="text-[10px] text-[#FBDB8C]/60 mt-2 flex items-center gap-1.5 tracking-wide flex-wrap">
-              <HeartHandshake size={12} className="flex-shrink-0" />
-              Confirmed 1.5 Ft statue seva awards{' '}
-              <strong>{effectiveCoinReward} AVG coins</strong> on the devotee&apos;s{' '}
-              <strong>first</strong> statue (locked 5 yrs from seva date).
-              {effectiveCoinReward === 500 && (
-                <span className="opacity-70 ml-0.5">Promotional rate — seva dated on/before 7 Sep 2026.</span>
-              )}
-            </p>
+          {selectedCategory?.slug === 'statue_1_5_ft' && status === 'CONFIRMED' && (
+            <div className="mt-3">
+              <label className={commonStyles.label + ' flex items-center gap-1.5'}>
+                <HeartHandshake size={13} className="text-[#FBDB8C]/70 flex-shrink-0" />
+                AVG Coins to Grant
+              </label>
+              <div className="relative">
+                <IndianRupee className="w-4 h-4 text-[#FBDB8C]/40 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={coins}
+                  onChange={(e) => {
+                    setCoins(e.target.value);
+                    setCoinsEdited(true);
+                  }}
+                  placeholder="0"
+                  className={commonStyles.input + ' pl-11 tabular-nums'}
+                />
+              </div>
+              <p className="text-[10px] text-[#FBDB8C]/50 mt-1.5 tracking-wide">
+                Pre-filled with the standard rate ({effectiveCoinReward} coins
+                {effectiveCoinReward === 500 && ' — promo rate, seva dated on/before 7 Sep 2026'}).
+                Edit to override or set&nbsp;0 to skip. Awarded only on the devotee&apos;s{' '}
+                <strong>first</strong> statue, locked 5&nbsp;yrs from seva date.
+              </p>
+            </div>
           )}
         </div>
 
@@ -338,7 +382,7 @@ const AdminSevaEntry = () => {
             />
           </div>
           <p className="text-[10px] text-white/30 mt-1.5 tracking-wide">
-            Leave blank to stamp today. Seva dated on/before 7 Sep 2026 earns the 500-coin promo rate.
+            Leave blank to stamp today. Date also determines the pre-filled coin rate (100 standard / 500 promo ≤ 7 Sep 2026).
           </p>
         </div>
 

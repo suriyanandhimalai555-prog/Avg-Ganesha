@@ -31,7 +31,7 @@ function statueCoinReward(purchaseDate) {
     : STATUE_15FT_COIN_REWARD;
 }
 
-// Assign the statue seat number and award 100 AVG coins for a confirmed 1.5 Ft Statue
+// Assign the statue seat number and award AVG coins for a confirmed 1.5 Ft Statue
 // donation, both inside a single transaction.
 //
 // Race-safety: we lock the user row (SELECT ... FOR UPDATE) as a per-user mutex.
@@ -42,8 +42,13 @@ function statueCoinReward(purchaseDate) {
 // Both writes sharing one transaction means a coin-award failure can never leave a
 // committed statue number with no corresponding coin row.
 //
-// Called by reviewDonation and createAdminEntry.
-async function confirmStatueSeva(donation) {
+// coinAmount — optional. When provided by an admin entry, the admin-selected amount is
+// used instead of the automatic date-based rate. Pass 0 to assign the seat but skip
+// the coin award (once-per-devotee guard still holds for future calls).
+// When omitted (undefined), defaults to the automatic rate via statueCoinReward().
+//
+// Called by reviewDonation (no coinAmount → auto rate) and createAdminEntry (passes override).
+async function confirmStatueSeva(donation, coinAmount = statueCoinReward(donation.created_at)) {
   await withTransaction(async (client) => {
     // Per-user mutex: serialises all concurrent statue confirmations for this devotee.
     await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [donation.user_id]);
@@ -63,20 +68,23 @@ async function confirmStatueSeva(donation) {
       );
     }
 
-    // Award coins (500 for seva up to 7 Sep 2026, 100 from 8 Sep onward), once per devotee.
+    // Award coins — once per devotee, locked 5 yrs from seva date.
+    // Skip the INSERT entirely when coinAmount is 0 (admin opted out of coins).
     // The user-row lock above makes the NOT EXISTS check atomic with the INSERT for the same user.
-    await client.query(
-      `INSERT INTO user_avg_coins
-         (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
-       SELECT $1, $2, $3, 'STATUE_1_5_FT_DONATION', $4,
-              ($4::timestamptz + ($5 || ' years')::interval), FALSE
-       WHERE NOT EXISTS (
-         SELECT 1 FROM user_avg_coins
-         WHERE user_id = $1 AND source = 'STATUE_1_5_FT_DONATION'
-       )
-       ON CONFLICT (donation_id) DO NOTHING`,
-      [donation.user_id, donation.id, statueCoinReward(donation.created_at), donation.created_at, STATUE_15FT_LOCK_YEARS]
-    );
+    if (coinAmount > 0) {
+      await client.query(
+        `INSERT INTO user_avg_coins
+           (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
+         SELECT $1, $2, $3, 'STATUE_1_5_FT_DONATION', $4,
+                ($4::timestamptz + ($5 || ' years')::interval), FALSE
+         WHERE NOT EXISTS (
+           SELECT 1 FROM user_avg_coins
+           WHERE user_id = $1 AND source = 'STATUE_1_5_FT_DONATION'
+         )
+         ON CONFLICT (donation_id) DO NOTHING`,
+        [donation.user_id, donation.id, coinAmount, donation.created_at, STATUE_15FT_LOCK_YEARS]
+      );
+    }
   });
 }
 
@@ -385,6 +393,19 @@ export const createAdminEntry = async (req, res) => {
   // entry is stamped with the actual seva date and earns the correct coin reward (500 vs 100).
   const rawDate = req.body.purchaseDate || req.body.date || null;
 
+  // Optional AVG-coin override for a confirmed 1.5 Ft statue seva (admin picks the amount).
+  // Absent / not sent → undefined → confirmStatueSeva uses the automatic date-based rate.
+  // Sent as '' or '0'  → 0       → seat is assigned but no coins are awarded.
+  // Sent as '250' etc. → 250     → that exact amount is used.
+  let coinOverride; // undefined = fall back to the automatic statueCoinReward() default
+  if (req.body.coins !== undefined) {
+    if (req.body.coins === '' || req.body.coins === null) {
+      coinOverride = 0;
+    } else {
+      coinOverride = parseInt(req.body.coins, 10);
+    }
+  }
+
   try {
     if (!userId || !categoryId) {
       return res.status(400).json({ error: 'userId and categoryId are required' });
@@ -394,6 +415,9 @@ export const createAdminEntry = async (req, res) => {
     }
     if (!['CONFIRMED', 'PENDING'].includes(status)) {
       return res.status(400).json({ error: "status must be CONFIRMED or PENDING" });
+    }
+    if (coinOverride !== undefined && (Number.isNaN(coinOverride) || coinOverride < 0)) {
+      return res.status(400).json({ error: 'coins must be a non-negative integer' });
     }
 
     // Validate optional purchase date — must be a valid date and not in the future.
@@ -455,9 +479,10 @@ export const createAdminEntry = async (req, res) => {
       donation = result.rows[0];
     }
 
-    // Assign seat number + award coins for a confirmed statue seva
+    // Assign seat number + award coins for a confirmed statue seva.
+    // coinOverride: undefined → auto rate; 0 → seat assigned, no coins; N → N coins.
     if (status === 'CONFIRMED' && isStatue) {
-      await confirmStatueSeva(donation);
+      await confirmStatueSeva(donation, coinOverride);
     }
 
     await Promise.all([
