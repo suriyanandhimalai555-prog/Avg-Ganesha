@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   X,
   ExternalLink,
+  Download,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { API_ROUTES } from '../../config/api';
@@ -19,6 +20,7 @@ import ActionConfirmModal from './ActionConfirmModal';
 import SevaDateChangeModal from './SevaDateChangeModal';
 import { statueCoinRate, formatIstDate } from '../../config/coins';
 import LoadingScreen from '../../components/LoadingScreen';
+import { toCsv, downloadFile } from '../../utils/csv';
 import {
   AdminPageHeader,
   AdminSearchInput,
@@ -28,6 +30,29 @@ import {
 } from './AdminChrome';
 
 const STATUS_FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'REJECTED'];
+
+const fmtDate = (d) => (d ? new Date(d).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '');
+
+// Every column the seva export endpoint returns.
+const EXPORT_COLUMNS = [
+  { header: 'Seva ID', key: 'id' },
+  { header: 'Seva Date (IST)', key: (r) => fmtDate(r.created_at) },
+  { header: 'Devotee ID', key: 'user_id' },
+  { header: 'Devotee Name', key: 'full_name' },
+  { header: 'Email', key: 'email' },
+  { header: 'Phone', key: 'phone_number' },
+  { header: 'Seva Category', key: 'category_name' },
+  { header: 'Amount', key: 'amount' },
+  { header: 'Status', key: 'status' },
+  { header: 'Rejection Reason', key: 'rejection_reason' },
+  { header: 'Statue Number', key: 'statue_number' },
+  { header: 'AVG Coins', key: 'coins' },
+  { header: 'Coins Locked Until', key: (r) => fmtDate(r.coins_locked_until) },
+  { header: 'Recorded By', key: 'recorded_by_name' },
+  { header: 'Reviewed By', key: 'reviewed_by_name' },
+  { header: 'Last Updated (IST)', key: (r) => fmtDate(r.updated_at) },
+  { header: 'Payment Proof (link, 7 days)', key: 'payment_proof_url' },
+];
 
 const AdminSeva = () => {
   const currentUser = useSelector((state) => state.auth.user);
@@ -47,6 +72,7 @@ const AdminSeva = () => {
   );
   const [page, setPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(1);
+  const [exporting, setExporting] = useState(false);
 
   const [actionModal, setActionModal] = useState({
     isOpen: false,
@@ -111,6 +137,26 @@ const AdminSeva = () => {
 
   useEffect(() => { fetchDonations(); }, [fetchDonations]);
 
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const qs = new URLSearchParams();
+      if (search) qs.set('search', search);
+      if (statusFilter !== 'ALL') qs.set('status', statusFilter);
+      const res = await api.get(`${API_ROUTES.DONATIONS.ADMIN_EXPORT}${qs.toString() ? `?${qs}` : ''}`);
+      const csv = toCsv(res.data.data, EXPORT_COLUMNS);
+      const date = new Date().toISOString().slice(0, 10);
+      const suffix = statusFilter !== 'ALL' ? `-${statusFilter.toLowerCase()}` : '';
+      downloadFile(csv, `seva-offerings${suffix}-${date}.csv`);
+    } catch (err) {
+      console.error('Seva export failed', err);
+      alert(err.response?.data?.error || 'Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const openActionModal = (id, status, donation = {}) => {
     const slug = donation.category_slug || '';
     const createdAt = donation.created_at || null;
@@ -156,12 +202,24 @@ const AdminSeva = () => {
         title="Seva Offerings"
         subtitle="Review and confirm devotee seva contributions."
         actions={
-          <AdminSearchInput
-            className="w-full md:w-72"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by name, email, category..."
-          />
+          <>
+            <AdminSearchInput
+              className="w-full md:w-72"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search by name, email, category..."
+            />
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || loading || donations.length === 0}
+              title={`Export ${statusFilter === 'ALL' ? 'all' : statusFilter} seva offerings${search ? ' matching search' : ''} (all pages)`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#FBDB8C]/10 border border-[#FBDB8C]/20 text-[#FBDB8C] text-[10px] font-black uppercase tracking-widest hover:bg-[#FBDB8C]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+          </>
         }
         toolbar={
           <AdminFilterChips

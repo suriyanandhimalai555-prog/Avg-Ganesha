@@ -9,6 +9,7 @@ import {
   getMyDonations,
   getMyDonationStats,
   getPendingDonations,
+  exportDonations,
   reviewDonation,
   createAdminEntry,
   getStatueNumbers,
@@ -67,6 +68,7 @@ router.get('/my-coins', authenticateToken, getMyCoins);
 
 // Console operations — ADMIN and STAFF (data-entry operator). God-powers stay ADMIN-only elsewhere.
 router.get('/admin/pending', authenticateToken, authorizeRole('ADMIN', 'STAFF'), getPendingDonations);
+router.get('/admin/export', authenticateToken, authorizeRole('ADMIN', 'STAFF'), exportDonations);
 router.post('/admin/review/:donationId', authenticateToken, authorizeRole('ADMIN', 'STAFF'), reviewDonation);
 router.post('/admin/entry', authenticateToken, authorizeRole('ADMIN', 'STAFF'), upload.single('paymentProof'), createAdminEntry);
 router.get('/admin/statue-numbers', authenticateToken, authorizeRole('ADMIN', 'STAFF'), getStatueNumbers);

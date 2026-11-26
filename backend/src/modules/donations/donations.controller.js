@@ -2,7 +2,7 @@
  * Donations controller - submit, list, admin approve/reject.
  */
 import { query, withTransaction } from '../../shared/db.js';
-import { uploadToS3 } from '../../shared/s3.js';
+import { uploadToS3, getS3SignedUrl } from '../../shared/s3.js';
 import { getCachedData, invalidateCache } from '../../shared/redis.js';
 import {
   STATUE_SLUG,
@@ -55,14 +55,16 @@ async function confirmStatueSeva(client, donation, coinAmount) {
   }
 
   // Award coins — once per devotee, locked 5 yrs from the seva date.
+  // Params are cast explicitly: $6 appears in both the SELECT list and the WHERE, and
+  // without a cast Postgres infers varchar in one and text in the other (error 42P08).
   await client.query(
     `INSERT INTO user_avg_coins
        (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
-     SELECT $1, $2, $3, $6, $4,
-            ($4::timestamptz + ($5 || ' years')::interval), FALSE
+     SELECT $1::int, $2::int, $3::numeric, $6::varchar, $4::timestamptz,
+            ($4::timestamptz + ($5::text || ' years')::interval), FALSE
      WHERE NOT EXISTS (
        SELECT 1 FROM user_avg_coins
-       WHERE user_id = $1 AND source = $6
+       WHERE user_id = $1::int AND source = $6::varchar
      )
      ON CONFLICT (donation_id) DO NOTHING`,
     [donation.user_id, donation.id, amount, donation.created_at, STATUE_15FT_LOCK_YEARS, STATUE_COIN_SOURCE]
@@ -308,6 +310,70 @@ export const getPendingDonations = async (req, res) => {
   } catch (err) {
     console.error('Pending donations error:', err);
     res.status(500).json({ error: 'Failed to fetch pending donations' });
+  }
+};
+
+// --- Admin: export seva offerings (all rows matching the current status/search, no pagination) ---
+// Payment-proof links are pre-signed S3 URLs valid for 7 days (S3 maximum); after that, re-export.
+const EXPORT_PROOF_URL_TTL = 7 * 24 * 60 * 60;
+
+export const exportDonations = async (req, res) => {
+  try {
+    const search = req.query.search || '';
+    const statusFilter = (req.query.status || 'ALL').toUpperCase();
+
+    const conditions = [];
+    const values = [];
+    if (['PENDING', 'CONFIRMED', 'REJECTED'].includes(statusFilter)) {
+      values.push(statusFilter);
+      conditions.push(`d.status = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      conditions.push(`(u.full_name ILIKE $${values.length} OR u.email ILIKE $${values.length} OR dc.name ILIKE $${values.length})`);
+    }
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await query(
+      `SELECT d.id, d.amount, d.status, d.created_at, d.updated_at, d.rejection_reason,
+              d.statue_number, d.payment_proof_path,
+              dc.name AS category_name,
+              u.id AS user_id, u.full_name, u.email, u.phone_number,
+              c.amount AS coins, c.locked_until AS coins_locked_until,
+              rec.full_name AS recorded_by_name, rev.full_name AS reviewed_by_name
+       FROM donations d
+       LEFT JOIN donation_categories dc ON d.category_id = dc.id
+       JOIN users u ON d.user_id = u.id
+       LEFT JOIN user_avg_coins c ON c.donation_id = d.id
+       LEFT JOIN users rec ON d.recorded_by = rec.id
+       LEFT JOIN users rev ON d.reviewed_by = rev.id
+       ${whereClause}
+       ORDER BY d.created_at DESC`,
+      values
+    );
+
+    const signProof = async (raw) => {
+      if (!raw || typeof raw !== 'string') return '';
+      try {
+        return await getS3SignedUrl(raw, EXPORT_PROOF_URL_TTL);
+      } catch {
+        return raw;
+      }
+    };
+
+    const rows = await Promise.all(
+      result.rows.map(async ({ payment_proof_path, ...row }) => ({
+        ...row,
+        amount: parseFloat(row.amount) || 0,
+        coins: row.coins == null ? '' : parseFloat(row.coins),
+        payment_proof_url: await signProof(payment_proof_path),
+      }))
+    );
+
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    console.error('Export donations error:', err);
+    res.status(500).json({ error: 'Failed to export seva offerings' });
   }
 };
 
