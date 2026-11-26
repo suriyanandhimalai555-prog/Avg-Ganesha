@@ -1,5 +1,6 @@
 import { query } from '../../shared/db.js';
 import { uploadToS3 } from '../../shared/s3.js';
+import { invalidateCache } from '../../shared/redis.js';
 
 // --- 1. SUBMIT KYC ---
 export const submitKYC = async (req, res) => {
@@ -10,6 +11,12 @@ export const submitKYC = async (req, res) => {
   }
 
   try {
+    // An approved devotee must not be able to knock themselves back to SUBMITTED.
+    const cur = await query('SELECT kyc_status FROM users WHERE id = $1', [userId]);
+    if (cur.rows[0]?.kyc_status === 'APPROVED') {
+      return res.status(400).json({ error: 'KYC is already approved' });
+    }
+
     // Upload both files to S3
     const [frontUrl, backUrl] = await Promise.all([
       uploadToS3(req.files.idFront[0].path, 'kyc'),
@@ -18,11 +25,15 @@ export const submitKYC = async (req, res) => {
 
     await query(
       `UPDATE users 
-       SET kyc_status = 'SUBMITTED', 
-           details = jsonb_set(COALESCE(details, '{}'), '{kyc_docs}', $1)
+       SET kyc_status = 'SUBMITTED',
+           kyc_rejection_reason = NULL,
+           details = jsonb_set(COALESCE(details, '{}'), '{kyc_docs}', $1),
+           updated_at = NOW()
        WHERE id = $2`,
       [JSON.stringify({ front: frontUrl, back: backUrl }), userId]
     );
+
+    await invalidateCache('admin:stats');
 
     res.json({ message: 'KYC Submitted Successfully' });
 
@@ -52,15 +63,21 @@ export const getKycStatus = async (req, res) => {
 };
 
 // --- 3. REVIEW KYC ---
+// Legacy endpoint (POST /api/kyc/review). The console uses /api/admin/kyc-review;
+// this mirrors it so either path records the reviewer and reason consistently.
 export const reviewKYC = async (req, res) => {
-  const { userId, status } = req.body; 
+  const { userId, status, rejectionReason } = req.body;
   
   try {
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
-    await query('UPDATE users SET kyc_status = $1 WHERE id = $2', [status, userId]);
+    await query(
+      'UPDATE users SET kyc_status = $1, kyc_rejection_reason = $2, kyc_reviewed_by = $3, updated_at = NOW() WHERE id = $4',
+      [status, status === 'REJECTED' ? rejectionReason || null : null, req.user.id, userId]
+    );
+    await invalidateCache('admin:stats');
 
     res.json({ message: `User KYC has been ${status}` });
   } catch (err) {

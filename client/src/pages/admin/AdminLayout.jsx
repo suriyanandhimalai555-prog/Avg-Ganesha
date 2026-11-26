@@ -14,6 +14,7 @@ import {
   PlusCircle,
   Hash,
   Upload,
+  Coins,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { logout } from '../../redux/slices/authSlice';
@@ -28,9 +29,8 @@ import { logout } from '../../redux/slices/authSlice';
   or calling the `refreshStats` helper from context.
 */
 
-// Nav groups. Each item computes its own `active` because two items share the
-// same /admin/devotees path (Devotees = all, KYC Review = SUBMITTED filter),
-// which NavLink's path-only matching can't distinguish.
+// Nav groups. Each item computes its own `active` (path-prefix match).
+// Devotees (/admin/devotees) and KYC Review (/admin/kyc) are separate pages.
 const NAV_GROUPS = [
   {
     label: 'Main',
@@ -52,17 +52,15 @@ const NAV_GROUPS = [
         to: '/admin/devotees',
         label: 'Devotees',
         Icon: Users,
-        match: ({ pathname, filter }) =>
-          pathname.startsWith('/admin/devotees') && filter !== 'SUBMITTED',
+        match: ({ pathname }) => pathname.startsWith('/admin/devotees'),
       },
       {
         key: 'kyc',
-        to: '/admin/devotees?filter=SUBMITTED',
+        to: '/admin/kyc',
         label: 'KYC Review',
         Icon: ShieldCheck,
         badgeKey: 'submittedKYC',
-        match: ({ pathname, filter }) =>
-          pathname.startsWith('/admin/devotees') && filter === 'SUBMITTED',
+        match: ({ pathname }) => pathname === '/admin/kyc' || pathname.startsWith('/admin/kyc/'),
       },
       {
         key: 'kyc-entry',
@@ -93,6 +91,13 @@ const NAV_GROUPS = [
         label: 'Statue Numbers',
         Icon: Hash,
         match: ({ pathname }) => pathname.startsWith('/admin/statue-numbers'),
+      },
+      {
+        key: 'coin-holdings',
+        to: '/admin/coin-holdings',
+        label: 'Coin Holdings',
+        Icon: Coins,
+        match: ({ pathname }) => pathname.startsWith('/admin/coin-holdings'),
       },
       {
         key: 'invite-tree',

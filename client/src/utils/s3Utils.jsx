@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
  * @param {string} rawPath - The path or URI stored in DB
  * @returns {Promise<string>} - A viewable URL
  */
+// eslint-disable-next-line react-refresh/only-export-components -- shared helper, used by the components below
 export const getImageUrl = async (rawPath) => {
   if (!rawPath) return '';
   

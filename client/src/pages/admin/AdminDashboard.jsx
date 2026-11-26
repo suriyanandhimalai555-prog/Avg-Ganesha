@@ -28,28 +28,29 @@ const AdminDashboard = () => {
       value: stats.totalUsers,
       Icon: Users,
       accent: 'text-[#FBDB8C]',
-      to: '/admin/devotees?filter=ALL',
+      to: '/admin/devotees',
     },
     {
       title: 'KYC Review',
       value: stats.submittedKYC,
       Icon: FileText,
       accent: 'text-amber-400',
-      to: '/admin/devotees?filter=SUBMITTED',
+      to: '/admin/kyc?filter=SUBMITTED',
     },
     {
       title: 'Verified',
       value: stats.approvedKYC,
       Icon: CheckCircle,
       accent: 'text-emerald-400',
-      to: '/admin/devotees?filter=APPROVED',
+      to: '/admin/kyc?filter=APPROVED',
     },
     {
       title: 'Total Invited',
       value: stats.totalInvited,
       Icon: UserPlus,
       accent: 'text-purple-400',
-      to: '/admin/devotees?filter=ALL',
+      to: '/admin/devotees',
+      // (invited devotees are listed in the directory / Invite Tree)
     },
     {
       title: 'Pending Seva',
@@ -65,7 +66,7 @@ const AdminDashboard = () => {
       label: 'Review pending KYC',
       hint: `${statsLoading ? '…' : stats.submittedKYC ?? 0} awaiting verification`,
       Icon: ShieldCheck,
-      to: '/admin/devotees?filter=SUBMITTED',
+      to: '/admin/kyc?filter=SUBMITTED',
     },
     {
       label: 'Confirm Seva offerings',

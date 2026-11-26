@@ -31,33 +31,29 @@ export const initDb = async () => {
     await query(`ALTER TABLE donations ADD COLUMN IF NOT EXISTS reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
 
-    // Backfill: award 100 AVG coins for the EARLIEST confirmed 1.5 Ft Statue donation per
-    // devotee who has no coin row yet. Idempotent via UNIQUE(donation_id) + NOT EXISTS.
-    // Uses DISTINCT ON to select one row per user (the earliest confirmed statue donation).
-    // NOTE: keep this literal in sync with STATUE_15FT_COIN_REWARD in donations.controller.js.
-    // Historical context: the 500-coin promotional rate applied to seva up to 7 Sep 2026;
-    // existing 500-coin rows for that cohort are preserved and NOT touched here.
-    const backfill = await query(`
-      INSERT INTO user_avg_coins
-        (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
-      SELECT DISTINCT ON (d.user_id)
-             d.user_id, d.id, 100, 'STATUE_1_5_FT_DONATION', d.created_at,
-             d.created_at + INTERVAL '5 years', FALSE
-      FROM donations d
-      JOIN donation_categories dc ON dc.id = d.category_id
-      WHERE d.status = 'CONFIRMED'
-        AND dc.slug = 'statue_1_5_ft'
-        AND NOT EXISTS (
-          SELECT 1 FROM user_avg_coins uac
-          WHERE uac.user_id = d.user_id AND uac.source = 'STATUE_1_5_FT_DONATION'
-        )
-      ORDER BY d.user_id, d.created_at ASC
-      ON CONFLICT (donation_id) DO NOTHING
-      RETURNING id
+    // Audit trail for admin edits that change money-like data (e.g. seva date changes,
+    // which re-price AVG coins). Append-only; ON DELETE CASCADE with the donation.
+    await query(`
+      CREATE TABLE IF NOT EXISTS donation_audit_log (
+        id           SERIAL        PRIMARY KEY,
+        donation_id  INTEGER       NOT NULL REFERENCES donations(id) ON DELETE CASCADE,
+        action       VARCHAR(32)   NOT NULL,
+        changed_by   INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+        old_value    TEXT,
+        new_value    TEXT,
+        coin_old     NUMERIC(12,2),
+        coin_new     NUMERIC(12,2),
+        note         TEXT,
+        created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
     `);
-    if (backfill.rowCount > 0) {
-      console.log(`✅ Backfilled AVG coins for ${backfill.rowCount} confirmed 1.5 Ft Statue donation(s)`);
-    }
+    await query(`CREATE INDEX IF NOT EXISTS idx_donation_audit_log_donation ON donation_audit_log(donation_id);`);
+
+    // NOTE: the one-time AVG-coin backfill that used to run here on EVERY boot has been
+    // removed. It (a) always inserted 100 coins, even for seva dated in the 500-coin
+    // promotional window, and (b) re-awarded coins to devotees for whom an admin had
+    // deliberately chosen 0 coins, on the next restart. The backfill already ran on
+    // production long ago; new coin rows are written only by confirmStatueSeva().
 
     console.log('✅ Schema bootstrap: user_avg_coins ready');
   } catch (err) {

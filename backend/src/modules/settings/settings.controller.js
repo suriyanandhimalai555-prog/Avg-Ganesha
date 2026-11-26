@@ -27,7 +27,17 @@ export const getBankDetails = async (req, res) => {
 
 // PUT: Update bank details (Superuser Only)
 export const updateBankDetails = async (req, res) => {
-  const updates = req.body; // Expects { bank_account_name: '...', ... }
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  // Only bank_* keys are editable here (this is the only cache we invalidate, and other
+  // keys such as statue prices must not be changed through this endpoint).
+  const updates = Object.fromEntries(
+    Object.entries(body)
+      .filter(([k]) => /^bank_[a-z_]+$/.test(k))
+      .map(([k, v]) => [k, v == null ? '' : String(v).trim()])
+  );
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No bank settings provided' });
+  }
 
   try {
     // Loop through each key and update it

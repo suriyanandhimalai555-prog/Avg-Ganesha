@@ -1,9 +1,27 @@
-import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
 import { LayoutDashboard, Heart, Gift, Phone, User, Users, LogOut, X, ShieldCheck } from 'lucide-react';
 import { commonStyles, sidebarStyles } from '../styles/index.styles';
+
+// Defined at module level (not inside Sidebar) so React doesn't remount every item
+// on each render.
+const NavItem = ({ icon, label, to, isSpecial = false, pathname, onNavigate }) => {
+  const Icon = icon;
+  const isActive = pathname === to || (to !== '/dashboard' && pathname.startsWith(to));
+
+  return (
+    <button
+      onClick={() => onNavigate(to)}
+      className={`${sidebarStyles.navItemBase} ${isActive ? sidebarStyles.navItemActive :
+        isSpecial ? sidebarStyles.navItemSpecial : sidebarStyles.navItemInactive
+        }`}
+    >
+      <Icon size={20} className={sidebarStyles.navItemIcon} />
+      <span className={sidebarStyles.navItemLabel}>{label}</span>
+    </button>
+  );
+};
 
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
@@ -12,7 +30,12 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const { user, token } = useSelector((state) => state.auth);
   const isLoggedIn = !!token && !!user;
-  const isAdmin = user?.role === 'ADMIN';
+
+  const goTo = (to) => {
+    navigate(to);
+    if (window.innerWidth < 768) onClose();
+  };
+  const nav = { pathname: location.pathname, onNavigate: goTo };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -25,25 +48,6 @@ const Sidebar = ({ isOpen, onClose }) => {
     } else {
       navigate('/login');
     }
-  };
-
-  const NavItem = ({ icon: Icon, label, to, isSpecial = false }) => {
-    const isActive = location.pathname === to || (to !== '/dashboard' && location.pathname.startsWith(to));
-
-    return (
-      <button
-        onClick={() => {
-          navigate(to);
-          if (window.innerWidth < 768) onClose();
-        }}
-        className={`${sidebarStyles.navItemBase} ${isActive ? sidebarStyles.navItemActive :
-          isSpecial ? sidebarStyles.navItemSpecial : sidebarStyles.navItemInactive
-          }`}
-      >
-        <Icon size={20} className={sidebarStyles.navItemIcon} />
-        <span className={sidebarStyles.navItemLabel}>{label}</span>
-      </button>
-    );
   };
 
   return (
@@ -81,12 +85,12 @@ const Sidebar = ({ isOpen, onClose }) => {
 
         {/* Navigation */}
         <nav className={sidebarStyles.navContainer}>
-          {isLoggedIn && <NavItem to="/dashboard" icon={LayoutDashboard} label="DASHBOARD" />}
-          <NavItem to="/donate" icon={Heart} label="DONATE" />
-          {isLoggedIn && <NavItem to="/dashboard/kyc" icon={ShieldCheck} label="VERIFY KYC" />}
-          {isLoggedIn && <NavItem to="/dashboard/network" icon={Users} label="INVITE" />}
-          <NavItem to="/dashboard/support" icon={Phone} label="SUPPORT" />
-          {isLoggedIn && <NavItem to="/dashboard/profile" icon={User} label="PROFILE" />}
+          {isLoggedIn && <NavItem {...nav} to="/dashboard" icon={LayoutDashboard} label="DASHBOARD" />}
+          <NavItem {...nav} to="/donate" icon={Heart} label="DONATE" />
+          {isLoggedIn && <NavItem {...nav} to="/dashboard/kyc" icon={ShieldCheck} label="VERIFY KYC" />}
+          {isLoggedIn && <NavItem {...nav} to="/dashboard/network" icon={Users} label="INVITE" />}
+          <NavItem {...nav} to="/dashboard/support" icon={Phone} label="SUPPORT" />
+          {isLoggedIn && <NavItem {...nav} to="/dashboard/profile" icon={User} label="PROFILE" />}
         </nav>
 
         {/* Logout */}

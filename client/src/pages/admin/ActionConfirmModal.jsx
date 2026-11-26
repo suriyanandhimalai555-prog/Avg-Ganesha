@@ -1,8 +1,10 @@
+import { HeartHandshake } from 'lucide-react';
 import { commonStyles, adminStyles } from '../../styles/index.styles';
 
 /**
  * Shared confirmation modal for admin approve/reject actions.
  * The reject branch shows a free-text reason input.
+ * When showCoins is true (confirmed statue seva), shows an AVG-coin amount input.
  */
 const ActionConfirmModal = ({
   isOpen,
@@ -13,6 +15,11 @@ const ActionConfirmModal = ({
   loading,
   onCancel,
   onConfirm,
+  // Optional coin-override props — only used for the 1.5 Ft statue seva confirm.
+  showCoins = false,
+  coinValue = '',
+  onCoinChange,
+  coinHint = '',
 }) => {
   if (!isOpen) return null;
 
@@ -49,6 +56,27 @@ const ActionConfirmModal = ({
               placeholder="Provide a reason..."
               rows={3}
             />
+          </div>
+        )}
+
+        {showCoins && !isReject && (
+          <div className="mb-6 space-y-2">
+            <label className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em] flex items-center gap-1.5">
+              <HeartHandshake size={11} className="flex-shrink-0" />
+              AVG Coins to Grant
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={coinValue}
+              onChange={(e) => onCoinChange?.(e.target.value)}
+              placeholder="0"
+              className="w-full bg-white/5 border border-[#FBDB8C]/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[#FBDB8C]/40 outline-none transition-all tabular-nums"
+            />
+            {coinHint && (
+              <p className="text-[10px] text-[#FBDB8C]/50 tracking-wide">{coinHint}</p>
+            )}
           </div>
         )}
 

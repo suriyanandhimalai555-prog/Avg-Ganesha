@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import {
+  CalendarDays,
   Mail,
   CheckCircle,
   Clock,
@@ -14,6 +16,8 @@ import { API_ROUTES } from '../../config/api';
 import { commonStyles, adminStyles } from '../../styles/index.styles';
 import { S3Image, S3Anchor } from '../../utils/s3Utils.jsx';
 import ActionConfirmModal from './ActionConfirmModal';
+import SevaDateChangeModal from './SevaDateChangeModal';
+import { statueCoinRate, formatIstDate } from '../../config/coins';
 import LoadingScreen from '../../components/LoadingScreen';
 import {
   AdminPageHeader,
@@ -26,6 +30,10 @@ import {
 const STATUS_FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'REJECTED'];
 
 const AdminSeva = () => {
+  const currentUser = useSelector((state) => state.auth.user);
+  const isAdmin = currentUser?.role === 'ADMIN'; // date changes re-price coins → ADMIN only
+  const [dateChangeDonation, setDateChangeDonation] = useState(null);
+  const [notice, setNotice] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStatus = (searchParams.get('status') || 'ALL').toUpperCase();
   const initialSearch = searchParams.get('q') || '';
@@ -44,9 +52,15 @@ const AdminSeva = () => {
     isOpen: false,
     targetId: null,
     targetStatus: '',
+    targetSlug: '',
+    targetCreatedAt: null,
   });
   const [actionReason, setActionReason] = useState('');
+  const [actionCoins, setActionCoins] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Auto coin pre-fill for a 1.5 Ft statue confirm, from its seva date (IST).
+  const statueAutoCoinRate = (createdAt) => statueCoinRate(createdAt);
 
   const [proofViewDonation, setProofViewDonation] = useState(null);
 
@@ -97,26 +111,39 @@ const AdminSeva = () => {
 
   useEffect(() => { fetchDonations(); }, [fetchDonations]);
 
-  const openActionModal = (id, status) => {
-    setActionModal({ isOpen: true, targetId: id, targetStatus: status });
+  const openActionModal = (id, status, donation = {}) => {
+    const slug = donation.category_slug || '';
+    const createdAt = donation.created_at || null;
+    setActionModal({ isOpen: true, targetId: id, targetStatus: status, targetSlug: slug, targetCreatedAt: createdAt });
     setActionReason('');
+    // Pre-fill coin amount for a confirmed statue seva; clear for anything else.
+    if (status === 'CONFIRMED' && slug === 'statue_1_5_ft') {
+      setActionCoins(String(statueAutoCoinRate(createdAt)));
+    } else {
+      setActionCoins('');
+    }
   };
-  const closeActionModal = () =>
-    setActionModal({ isOpen: false, targetId: null, targetStatus: '' });
+  const closeActionModal = () => {
+    setActionModal({ isOpen: false, targetId: null, targetStatus: '', targetSlug: '', targetCreatedAt: null });
+    setActionCoins('');
+  };
 
   const executeAction = async () => {
     setActionLoading(true);
     try {
+      const isStatueConfirm =
+        actionModal.targetStatus === 'CONFIRMED' && actionModal.targetSlug === 'statue_1_5_ft';
       await api.post(API_ROUTES.DONATIONS.ADMIN_REVIEW(actionModal.targetId), {
         status: actionModal.targetStatus,
         rejectionReason: actionReason,
+        ...(isStatueConfirm && { coins: actionCoins === '' ? 0 : parseInt(actionCoins, 10) }),
       });
       setProofViewDonation(null);
       await fetchDonations();
       window.dispatchEvent(new CustomEvent('admin:refresh-stats'));
       closeActionModal();
-    } catch {
-      alert('Failed to process action. Please try again.');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to process action. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -144,6 +171,15 @@ const AdminSeva = () => {
           />
         }
       />
+
+      {notice && (
+        <div className="mb-4 flex items-start justify-between gap-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-3 text-sm text-emerald-300">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} className="text-white/40 hover:text-white">
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <AdminCard>
@@ -198,9 +234,19 @@ const AdminSeva = () => {
                       </div>
                     </td>
                     <td className={commonStyles.tableCell}>
-                      <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                        {new Date(d.created_at).toLocaleDateString()}
+                      <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">
+                        {formatIstDate(d.created_at)}
                       </div>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => setDateChangeDonation(d)}
+                          className="mt-1.5 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#FBDB8C]/50 hover:text-[#FBDB8C] transition-colors"
+                          title="Change seva date (re-prices statue coins)"
+                        >
+                          <CalendarDays size={10} /> Change
+                        </button>
+                      )}
                     </td>
                     <td className={commonStyles.tableCell}>
                       <span
@@ -240,7 +286,7 @@ const AdminSeva = () => {
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => openActionModal(d.id, 'CONFIRMED')}
+                            onClick={() => openActionModal(d.id, 'CONFIRMED', d)}
                             disabled={actionLoading}
                             className={adminStyles.actionBtnApprove}
                           >
@@ -248,7 +294,7 @@ const AdminSeva = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => openActionModal(d.id, 'REJECTED')}
+                            onClick={() => openActionModal(d.id, 'REJECTED', d)}
                             disabled={actionLoading}
                             className={adminStyles.actionBtnReject}
                           >
@@ -353,9 +399,11 @@ const AdminSeva = () => {
               >
                 Return
               </button>
+              {proofViewDonation.status === 'PENDING' && (
+              <>
               <button
                 type="button"
-                onClick={() => openActionModal(proofViewDonation.id, 'REJECTED')}
+                onClick={() => openActionModal(proofViewDonation.id, 'REJECTED', proofViewDonation)}
                 disabled={actionLoading}
                 className={adminStyles.actionBtnReject + ' px-8 py-3.5'}
               >
@@ -363,15 +411,30 @@ const AdminSeva = () => {
               </button>
               <button
                 type="button"
-                onClick={() => openActionModal(proofViewDonation.id, 'CONFIRMED')}
+                onClick={() => openActionModal(proofViewDonation.id, 'CONFIRMED', proofViewDonation)}
                 disabled={actionLoading}
                 className={adminStyles.actionBtnApprove + ' px-8 py-3.5'}
               >
                 ✓ Accept Seva
               </button>
+              </>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {dateChangeDonation && (
+        <SevaDateChangeModal
+          donation={dateChangeDonation}
+          onClose={() => setDateChangeDonation(null)}
+          onChanged={async (message) => {
+            setDateChangeDonation(null);
+            setNotice(message);
+            await fetchDonations();
+            window.dispatchEvent(new CustomEvent('admin:refresh-stats'));
+          }}
+        />
       )}
 
       <ActionConfirmModal
@@ -382,6 +445,10 @@ const AdminSeva = () => {
         loading={actionLoading}
         onCancel={closeActionModal}
         onConfirm={executeAction}
+        showCoins={actionModal.targetStatus === 'CONFIRMED' && actionModal.targetSlug === 'statue_1_5_ft'}
+        coinValue={actionCoins}
+        onCoinChange={setActionCoins}
+        coinHint={`Pre-filled with the ${statueAutoCoinRate(actionModal.targetCreatedAt)}-coin rate for this seva's date. Edit to override, or 0 for no coins (still counts as their one-time statue reward). Awarded only on the devotee's first statue, locked 5 yrs.`}
       />
     </section>
   );

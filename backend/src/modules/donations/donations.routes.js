@@ -14,6 +14,8 @@ import {
   getStatueNumbers,
   updateStatueNumber,
   getMyCoins,
+  previewSevaDateChange,
+  changeSevaDate,
 } from './donations.controller.js';
 import { authenticateToken, authorizeRole } from '../../middleware/authMiddleware.js';
 
@@ -69,5 +71,8 @@ router.post('/admin/review/:donationId', authenticateToken, authorizeRole('ADMIN
 router.post('/admin/entry', authenticateToken, authorizeRole('ADMIN', 'STAFF'), upload.single('paymentProof'), createAdminEntry);
 router.get('/admin/statue-numbers', authenticateToken, authorizeRole('ADMIN', 'STAFF'), getStatueNumbers);
 router.patch('/admin/statue-number/:donationId', authenticateToken, authorizeRole('ADMIN', 'STAFF'), updateStatueNumber);
+// Changing a seva's date re-prices AVG coins (claw-back / top-up) — ADMIN only.
+router.get('/admin/:donationId/date-change', authenticateToken, authorizeRole('ADMIN'), previewSevaDateChange);
+router.patch('/admin/:donationId/date', authenticateToken, authorizeRole('ADMIN'), changeSevaDate);
 
 export default router;

@@ -7,12 +7,15 @@ import { authenticateToken, authorizeRole } from '../../middleware/authMiddlewar
 import {
   getAdminStats,
   getAllUsers,
+  getCoinHolders,
   updateUserRole,
   adminReviewKYC,
   updateUserDetails,
   getSignedImageUrl,
   getInviteTree,
   adminSubmitKYC,
+  resetUserPassword,
+  exportUsers,
 } from './admin.controller.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -52,6 +55,8 @@ router.use(authenticateToken, authorizeRole('ADMIN', 'STAFF'));
 
 router.get('/stats', getAdminStats);
 router.get('/users', getAllUsers);
+router.get('/users/export', exportUsers);
+router.get('/coin-holders', getCoinHolders);
 router.get('/invite-tree', getInviteTree);
 // Role changes are ADMIN-only (STAFF must not be able to promote accounts).
 router.post('/role', authorizeRole('ADMIN'), updateUserRole);
@@ -62,6 +67,8 @@ router.post(
   adminSubmitKYC
 );
 router.put('/users/:userId', updateUserDetails);
+// Password reset is ADMIN-only — it can take over any account, so STAFF never gets it.
+router.post('/users/:userId/password', authorizeRole('ADMIN'), resetUserPassword);
 router.post('/signed-url', getSignedImageUrl);
 
 export default router;

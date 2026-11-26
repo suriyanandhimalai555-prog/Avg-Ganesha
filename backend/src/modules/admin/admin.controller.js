@@ -1,6 +1,8 @@
 import { query } from '../../shared/db.js';
 import { getCachedData, invalidateCache } from '../../shared/redis.js';
 import { invalidateAuthUser } from '../../middleware/authMiddleware.js';
+import bcrypt from 'bcryptjs';
+import { authConfig } from '../../config/index.js';
 
 const CACHE_KEYS = {
   ADMIN_STATS: 'admin:stats'
@@ -57,6 +59,7 @@ export const getAllUsers = async (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
   const search = req.query.search || '';
   const kycStatus = req.query.kycStatus || '';
+  const role = (req.query.role || '').toUpperCase();
   const offset = (page - 1) * limit;
 
   try {
@@ -67,6 +70,11 @@ export const getAllUsers = async (req, res) => {
     if (kycStatus && kycStatus !== 'ALL') {
       whereClause += ` AND u.kyc_status = $${paramIndex}`;
       params.push(kycStatus);
+      paramIndex++;
+    }
+    if (['USER', 'STAFF', 'ADMIN'].includes(role)) {
+      whereClause += ` AND u.role = $${paramIndex}`;
+      params.push(role);
       paramIndex++;
     }
 
@@ -81,7 +89,7 @@ export const getAllUsers = async (req, res) => {
     const totalItems = parseInt(countResult.rows[0].count);
 
     const dataQuery = `
-      SELECT u.id, u.full_name, u.email, u.phone_number, u.role, u.invite_code, u.invite_count, u.kyc_status, u.created_at,
+      SELECT u.id, u.full_name, u.email, u.phone_number, u.role, u.invite_code, u.invite_count, u.kyc_status, u.kyc_rejection_reason, u.created_at,
              inviter.full_name as invited_by_name,
              kyc_rev.full_name as kyc_reviewed_by_name,
              u.details->'kyc_docs' as kyc_docs
@@ -185,7 +193,10 @@ export const adminReviewKYC = async (req, res) => {
 // --- 5. Edit User Details ---
 export const updateUserDetails = async (req, res) => {
   const { userId } = req.params;
-  const { email, phone_number } = req.body;
+  // Login looks emails up lower-cased (auth.service), so store them that way or the
+  // devotee can no longer sign in after an admin edit.
+  const email = (req.body.email || '').trim().toLowerCase();
+  const phone_number = (req.body.phone_number || '').trim();
 
   try {
     // Basic validation
@@ -296,7 +307,95 @@ export const adminSubmitKYC = async (req, res) => {
   }
 };
 
-// --- 9. Generate a pre-signed URL for a private S3 object ---
+// --- 9. Coin Holdings: users with AVG coins > 0 (read-only, paginated + search) ---
+// Query params:
+//   page  (default 1), limit (default 20), search (name or phone), all=true (no pagination, for CSV export)
+export const getCoinHolders = async (req, res) => {
+  const page  = parseInt(req.query.page)  || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const search = req.query.search || '';
+  const exportAll = req.query.all === 'true';
+  const kycFilter = req.query.kyc || 'all'; // 'all' | 'APPROVED' | 'NOT_APPROVED'
+  const offset = (page - 1) * limit;
+
+  try {
+    let whereClause = 'WHERE 1=1';
+    let params = [];
+    let paramIndex = 1;
+
+    if (search) {
+      whereClause += ` AND (u.full_name ILIKE $${paramIndex} OR u.phone_number ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (kycFilter === 'APPROVED') {
+      whereClause += ` AND u.kyc_status = $${paramIndex}`;
+      params.push('APPROVED');
+      paramIndex++;
+    } else if (kycFilter === 'NOT_APPROVED') {
+      whereClause += ` AND u.kyc_status != $${paramIndex}`;
+      params.push('APPROVED');
+      paramIndex++;
+    }
+
+    // COUNT: wrap the grouped-by-user subquery so HAVING is applied before counting
+    const countQuery = `
+      SELECT COUNT(*) FROM (
+        SELECT u.id
+        FROM users u
+        JOIN user_avg_coins c ON c.user_id = u.id
+        ${whereClause}
+        GROUP BY u.id
+        HAVING SUM(c.amount) > 0
+      ) t
+    `;
+    const countResult = await query(countQuery, params);
+    const totalItems = parseInt(countResult.rows[0].count);
+
+    // Data query — INNER JOIN restricts to holders only; HAVING drops zero/negative sums
+    let dataQuery = `
+      SELECT u.id, u.full_name, u.phone_number, u.kyc_status,
+             COALESCE(SUM(c.amount), 0) AS total_coins
+      FROM users u
+      JOIN user_avg_coins c ON c.user_id = u.id
+      ${whereClause}
+      GROUP BY u.id, u.full_name, u.phone_number, u.kyc_status
+      HAVING SUM(c.amount) > 0
+      ORDER BY SUM(c.amount) DESC, u.full_name ASC
+    `;
+
+    let dataParams = [...params];
+    if (!exportAll) {
+      dataQuery += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      dataParams = [...params, limit, offset];
+    }
+
+    const result = await query(dataQuery, dataParams);
+
+    // node-pg returns NUMERIC as string — normalise to number
+    const rows = result.rows.map((r) => ({
+      ...r,
+      total_coins: parseFloat(r.total_coins),
+    }));
+
+    const effectiveLimit = exportAll ? totalItems || 1 : limit;
+    res.json({
+      data: rows,
+      pagination: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / effectiveLimit) || 1,
+        currentPage: exportAll ? 1 : page,
+        itemsPerPage: effectiveLimit,
+      },
+    });
+  } catch (err) {
+    console.error('Coin Holders Error:', err);
+    res.status(500).json({ error: 'Server error fetching coin holders' });
+  }
+};
+
+// --- 10. Generate a pre-signed URL for a private S3 object ---
 export const getSignedImageUrl = async (req, res) => {
   const { s3Uri } = req.body;
   if (!s3Uri) {
@@ -308,5 +407,143 @@ export const getSignedImageUrl = async (req, res) => {
   } catch (err) {
     console.error('Sign URL Error:', err);
     res.status(500).json({ error: 'Failed to generate signed URL' });
+  }
+};
+
+// --- 11. Admin resets a devotee's password (ADMIN-only — guarded in routes) ---
+// Sets a new bcrypt hash. Existing JWTs stay valid until they expire (tokens are
+// stateless); the user simply logs in with the new password from now on.
+export const resetUserPassword = async (req, res) => {
+  const { userId } = req.params;
+  const { newPassword } = req.body || {};
+
+  if (typeof newPassword !== 'string' || newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+  if (newPassword.length > 72) {
+    // bcrypt silently truncates beyond 72 bytes — reject instead of surprising the user
+    return res.status(400).json({ error: 'Password must be at most 72 characters' });
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(authConfig.bcryptRounds);
+    const hash = await bcrypt.hash(newPassword, salt);
+
+    const result = await query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 RETURNING id, full_name, email',
+      [hash, userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await invalidateAuthUser(userId);
+    console.info(`Password reset for user ${userId} by admin ${req.user.id}`);
+
+    res.json({ message: `Password reset for ${result.rows[0].full_name || result.rows[0].email}` });
+  } catch (err) {
+    console.error('Reset Password Error:', err);
+    res.status(500).json({ error: 'Server error resetting password' });
+  }
+};
+
+// --- 12. Export devotees (all rows matching the current filter/search, every field incl. KYC) ---
+// KYC document links are pre-signed S3 URLs valid for 7 days (S3 maximum) so the
+// spreadsheet stays usable; after that, re-export.
+const EXPORT_DOC_URL_TTL = 7 * 24 * 60 * 60;
+
+export const exportUsers = async (req, res) => {
+  const search = req.query.search || '';
+  const kycStatus = req.query.kycStatus || '';
+  const role = (req.query.role || '').toUpperCase();
+
+  try {
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (kycStatus && kycStatus !== 'ALL') {
+      whereClause += ` AND u.kyc_status = $${paramIndex}`;
+      params.push(kycStatus);
+      paramIndex++;
+    }
+    if (['USER', 'STAFF', 'ADMIN'].includes(role)) {
+      whereClause += ` AND u.role = $${paramIndex}`;
+      params.push(role);
+      paramIndex++;
+    }
+    if (search) {
+      whereClause += ` AND (u.full_name ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex} OR u.invite_code ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    const result = await query(
+      `SELECT u.id, u.full_name, u.email, u.phone_number, u.role,
+              u.invite_code, u.invite_count, u.created_at, u.updated_at,
+              u.kyc_status, u.kyc_rejection_reason,
+              inviter.full_name   AS invited_by_name,
+              inviter.invite_code AS invited_by_code,
+              kyc_rev.full_name   AS kyc_reviewed_by_name,
+              u.details->'kyc_docs' AS kyc_docs,
+              COALESCE(coins.total_coins, 0)   AS total_coins,
+              COALESCE(dn.confirmed_count, 0)  AS confirmed_seva_count,
+              COALESCE(dn.confirmed_amount, 0) AS confirmed_seva_amount,
+              COALESCE(dn.pending_count, 0)    AS pending_seva_count,
+              dn.statue_numbers
+       FROM users u
+       LEFT JOIN users inviter ON u.invited_by = inviter.id
+       LEFT JOIN users kyc_rev ON u.kyc_reviewed_by = kyc_rev.id
+       LEFT JOIN (
+         SELECT user_id, SUM(amount) AS total_coins
+         FROM user_avg_coins GROUP BY user_id
+       ) coins ON coins.user_id = u.id
+       LEFT JOIN (
+         SELECT user_id,
+                COUNT(*) FILTER (WHERE status = 'CONFIRMED')                AS confirmed_count,
+                SUM(amount) FILTER (WHERE status = 'CONFIRMED')             AS confirmed_amount,
+                COUNT(*) FILTER (WHERE status = 'PENDING')                  AS pending_count,
+                STRING_AGG(DISTINCT statue_number::text, ' ')
+                  FILTER (WHERE statue_number IS NOT NULL)                  AS statue_numbers
+         FROM donations GROUP BY user_id
+       ) dn ON dn.user_id = u.id
+       ${whereClause}
+       ORDER BY u.created_at DESC`,
+      params
+    );
+
+    const signDoc = async (raw) => {
+      if (!raw || typeof raw !== 'string') return '';
+      try {
+        return await getS3SignedUrl(raw, EXPORT_DOC_URL_TTL);
+      } catch {
+        return raw;
+      }
+    };
+
+    const rows = await Promise.all(
+      result.rows.map(async (row) => {
+        let docs = row.kyc_docs;
+        if (typeof docs === 'string') {
+          try { docs = JSON.parse(docs); } catch { docs = null; }
+        }
+        const [front, back] = await Promise.all([signDoc(docs?.front), signDoc(docs?.back)]);
+        const { kyc_docs: _omit, ...rest } = row;
+        return {
+          ...rest,
+          total_coins: parseFloat(row.total_coins) || 0,
+          confirmed_seva_count: parseInt(row.confirmed_seva_count, 10) || 0,
+          confirmed_seva_amount: parseFloat(row.confirmed_seva_amount) || 0,
+          pending_seva_count: parseInt(row.pending_seva_count, 10) || 0,
+          kyc_doc_front_url: front,
+          kyc_doc_back_url: back,
+        };
+      })
+    );
+
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    console.error('Export Users Error:', err);
+    res.status(500).json({ error: 'Server error exporting devotees' });
   }
 };

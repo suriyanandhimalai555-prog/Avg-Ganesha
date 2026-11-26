@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   Calendar,
@@ -10,12 +10,18 @@ import {
   X,
   ExternalLink,
   Edit,
+  KeyRound,
+  Download,
+  Eye,
+  EyeOff,
+  RefreshCw,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { commonStyles, adminStyles } from '../../styles/index.styles';
 import { S3Image, S3Anchor } from '../../utils/s3Utils.jsx';
 import ActionConfirmModal from './ActionConfirmModal';
 import LoadingScreen from '../../components/LoadingScreen';
+import { toCsv, downloadFile } from '../../utils/csv';
 import {
   AdminPageHeader,
   AdminSearchInput,
@@ -24,20 +30,109 @@ import {
   AdminPagination,
 } from './AdminChrome';
 
-const KYC_FILTERS = ['ALL', 'SUBMITTED', 'APPROVED', 'REJECTED', 'PENDING'];
+const KYC_FILTERS = ['SUBMITTED', 'APPROVED', 'REJECTED', 'PENDING', 'ALL'];
+const ROLE_FILTERS = ['ALL', 'USER', 'STAFF', 'ADMIN'];
 
-const AdminDevotees = () => {
+/*
+  Two pages share this component:
+    mode="directory"  → /admin/devotees   — devotee list, filter by role (?role=),
+                                            edit contact, reset password, change role
+    mode="kyc"        → /admin/kyc        — KYC review queue, filter by KYC status
+                                            (?filter=, default SUBMITTED), docs, approve/reject
+*/
+const MODES = {
+  directory: {
+    filters: ROLE_FILTERS,
+    param: 'role',
+    apiParam: 'role',
+    defaultFilter: 'ALL',
+    title: 'Devotee Directory',
+    subtitle: 'All devotees — filter by role, edit contact details, reset passwords.',
+    filePrefix: 'devotees',
+  },
+  kyc: {
+    filters: KYC_FILTERS,
+    param: 'filter',
+    apiParam: 'kycStatus',
+    defaultFilter: 'SUBMITTED',
+    title: 'KYC Review',
+    subtitle: 'Verify identity documents — approve or reject KYC submissions.',
+    filePrefix: 'kyc',
+  },
+};
+
+const fmtDate = (d) => (d ? new Date(d).toLocaleString('en-IN') : '');
+
+// Every column the export endpoint returns, devotee + KYC + seva/coin summary.
+const EXPORT_COLUMNS = [
+  { header: 'ID', key: 'id' },
+  { header: 'Full Name', key: 'full_name' },
+  { header: 'Email', key: 'email' },
+  { header: 'Phone', key: 'phone_number' },
+  { header: 'Role', key: 'role' },
+  { header: 'Joined', key: (r) => fmtDate(r.created_at) },
+  { header: 'Last Updated', key: (r) => fmtDate(r.updated_at) },
+  { header: 'Invite Code', key: 'invite_code' },
+  { header: 'Invite Count', key: 'invite_count' },
+  { header: 'Invited By', key: 'invited_by_name' },
+  { header: 'Invited By Code', key: 'invited_by_code' },
+  { header: 'KYC Status', key: (r) => r.kyc_status || 'PENDING' },
+  { header: 'KYC Rejection Reason', key: 'kyc_rejection_reason' },
+  { header: 'KYC Reviewed By', key: 'kyc_reviewed_by_name' },
+  { header: 'KYC ID Front (link, 7 days)', key: 'kyc_doc_front_url' },
+  { header: 'KYC ID Back (link, 7 days)', key: 'kyc_doc_back_url' },
+  { header: 'Confirmed Seva Count', key: 'confirmed_seva_count' },
+  { header: 'Confirmed Seva Amount', key: 'confirmed_seva_amount' },
+  { header: 'Pending Seva Count', key: 'pending_seva_count' },
+  { header: 'Statue Number(s)', key: 'statue_numbers' },
+  { header: 'AVG Coins', key: 'total_coins' },
+];
+
+// KYC page export: identity + KYC fields first.
+const KYC_EXPORT_COLUMNS = [
+  { header: 'ID', key: 'id' },
+  { header: 'Full Name', key: 'full_name' },
+  { header: 'Email', key: 'email' },
+  { header: 'Phone', key: 'phone_number' },
+  { header: 'KYC Status', key: (r) => r.kyc_status || 'PENDING' },
+  { header: 'KYC Rejection Reason', key: 'kyc_rejection_reason' },
+  { header: 'KYC Reviewed By', key: 'kyc_reviewed_by_name' },
+  { header: 'KYC ID Front (link, 7 days)', key: 'kyc_doc_front_url' },
+  { header: 'KYC ID Back (link, 7 days)', key: 'kyc_doc_back_url' },
+  { header: 'Last Updated', key: (r) => fmtDate(r.updated_at) },
+  { header: 'Joined', key: (r) => fmtDate(r.created_at) },
+  { header: 'Role', key: 'role' },
+  { header: 'Invite Code', key: 'invite_code' },
+  { header: 'Invited By', key: 'invited_by_name' },
+  { header: 'Confirmed Seva Amount', key: 'confirmed_seva_amount' },
+  { header: 'Statue Number(s)', key: 'statue_numbers' },
+  { header: 'AVG Coins', key: 'total_coins' },
+];
+
+// Readable random password (no 0/O/1/l/I look-alikes).
+const generatePassword = (len = 10) => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const buf = new Uint32Array(len);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (n) => chars[n % chars.length]).join('');
+};
+
+const AdminDevotees = ({ mode = 'directory' }) => {
+  const cfg = MODES[mode] || MODES.directory;
+  const isKyc = mode === 'kyc';
+  const FILTERS = cfg.filters;
+  const navigate = useNavigate();
   const currentUser = useSelector((state) => state.auth.user);
   const isAdmin = currentUser?.role === 'ADMIN'; // only real admins may change roles
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialFilter = (searchParams.get('filter') || 'ALL').toUpperCase();
+  const initialFilter = (searchParams.get(cfg.param) || cfg.defaultFilter).toUpperCase();
   const initialSearch = searchParams.get('q') || '';
   const initialPage = parseInt(searchParams.get('page') || '1', 10);
 
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
-  const [kycFilter, setKycFilter] = useState(
-    KYC_FILTERS.includes(initialFilter) ? initialFilter : 'ALL'
+  const [listFilter, setListFilter] = useState(
+    FILTERS.includes(initialFilter) ? initialFilter : cfg.defaultFilter
   );
   const [search, setSearch] = useState(initialSearch);
   const [page, setPage] = useState(initialPage);
@@ -61,14 +156,29 @@ const AdminDevotees = () => {
   });
   const [editUserLoading, setEditUserLoading] = useState(false);
 
+  const [exporting, setExporting] = useState(false);
+
+  const [pwModal, setPwModal] = useState({ isOpen: false, user: null, password: '' });
+  const [pwVisible, setPwVisible] = useState(true);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwDone, setPwDone] = useState('');
+
   // Two-way sync between URL params and local state.
   // URL → state: needed when another part of the app (e.g. a stats tile) navigates
   // here with new query params while this component is already mounted.
+  // Legacy deep links (/admin/devotees?filter=SUBMITTED) → the KYC Review page.
   useEffect(() => {
-    const urlFilter = (searchParams.get('filter') || 'ALL').toUpperCase();
+    if (!isKyc && searchParams.get('filter')) {
+      navigate(`/admin/kyc?filter=${encodeURIComponent(searchParams.get('filter'))}`, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const urlFilter = (searchParams.get(cfg.param) || cfg.defaultFilter).toUpperCase();
     const urlSearch = searchParams.get('q') || '';
     const urlPage = parseInt(searchParams.get('page') || '1', 10);
-    if (KYC_FILTERS.includes(urlFilter) && urlFilter !== kycFilter) setKycFilter(urlFilter);
+    if (FILTERS.includes(urlFilter) && urlFilter !== listFilter) setListFilter(urlFilter);
     if (urlSearch !== search) setSearch(urlSearch);
     if (urlPage !== page) setPage(urlPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,21 +187,21 @@ const AdminDevotees = () => {
   // State → URL: keep URL in sync on user interactions (deep links + back button).
   useEffect(() => {
     const next = new URLSearchParams();
-    if (kycFilter && kycFilter !== 'ALL') next.set('filter', kycFilter);
+    if (listFilter && listFilter !== cfg.defaultFilter) next.set(cfg.param, listFilter);
     if (search) next.set('q', search);
     if (page > 1) next.set('page', String(page));
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kycFilter, search, page]);
+  }, [listFilter, search, page]);
 
   const fetchUsers = useCallback(async () => {
     try {
       setUsersLoading(true);
       let queryStr = `?page=${page}&limit=15`;
       if (search) queryStr += `&search=${encodeURIComponent(search)}`;
-      if (kycFilter !== 'ALL') queryStr += `&kycStatus=${kycFilter}`;
+      if (listFilter !== 'ALL') queryStr += `&${cfg.apiParam}=${listFilter}`;
       const res = await api.get(`/api/admin/users${queryStr}`);
       setUsers(res.data.data);
       setTotalPages(res.data.pagination.totalPages);
@@ -100,7 +210,8 @@ const AdminDevotees = () => {
     } finally {
       setUsersLoading(false);
     }
-  }, [page, search, kycFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, search, listFilter]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -163,25 +274,85 @@ const AdminDevotees = () => {
     }
   };
 
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const qs = new URLSearchParams();
+      if (search) qs.set('search', search);
+      if (listFilter !== 'ALL') qs.set(cfg.apiParam, listFilter);
+      const res = await api.get(`/api/admin/users/export${qs.toString() ? `?${qs}` : ''}`);
+      const csv = toCsv(res.data.data, isKyc ? KYC_EXPORT_COLUMNS : EXPORT_COLUMNS);
+      const date = new Date().toISOString().slice(0, 10);
+      const suffix = listFilter !== 'ALL' ? `-${listFilter.toLowerCase()}` : '';
+      downloadFile(csv, `${cfg.filePrefix}${suffix}-${date}.csv`);
+    } catch (err) {
+      console.error('Devotee export failed', err);
+      alert(err.response?.data?.error || 'Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const openPwModal = (user) => {
+    setPwModal({ isOpen: true, user, password: generatePassword() });
+    setPwVisible(true);
+    setPwDone('');
+  };
+  const closePwModal = () => {
+    setPwModal({ isOpen: false, user: null, password: '' });
+    setPwDone('');
+  };
+
+  const handleResetPassword = async () => {
+    if (pwModal.password.length < 6) {
+      alert('Password must be at least 6 characters.');
+      return;
+    }
+    setPwLoading(true);
+    try {
+      await api.post(`/api/admin/users/${pwModal.user.id}/password`, {
+        newPassword: pwModal.password,
+      });
+      setPwDone(pwModal.password);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to reset password.');
+    } finally {
+      setPwLoading(false);
+    }
+  };
+
   return (
     <section className="animate-fade-in">
       {/* Section header */}
       <AdminPageHeader
-        title="Devotee Directory"
-        subtitle="Manage devotees, review KYC and edit contact details."
+        title={cfg.title}
+        subtitle={cfg.subtitle}
         actions={
-          <AdminSearchInput
-            className="w-full md:w-96"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by name, email or code..."
-          />
+          <>
+            <AdminSearchInput
+              className="w-full md:w-96"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search by name, email or code..."
+            />
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || usersLoading || users.length === 0}
+              title={`Export ${listFilter === 'ALL' ? 'all' : listFilter} devotees${search ? ' matching search' : ''} (all pages, incl. KYC)`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#FBDB8C]/10 border border-[#FBDB8C]/20 text-[#FBDB8C] text-[10px] font-black uppercase tracking-widest hover:bg-[#FBDB8C]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+          </>
         }
         toolbar={
           <AdminFilterChips
-            options={KYC_FILTERS}
-            value={kycFilter}
-            onChange={(f) => { setKycFilter(f); setPage(1); }}
+            options={FILTERS}
+            value={listFilter}
+            onChange={(f) => { setListFilter(f); setPage(1); }}
           />
         }
       />
@@ -193,7 +364,9 @@ const AdminDevotees = () => {
             <thead className="bg-black/20">
               <tr>
                 <th className="px-4 md:px-8 py-4 md:py-6 text-left text-[9px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em]">Devotee Info</th>
-                <th className="px-4 md:px-8 py-4 md:py-6 text-left text-[9px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em]">Role</th>
+                {!isKyc && (
+                  <th className="px-4 md:px-8 py-4 md:py-6 text-left text-[9px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em]">Role</th>
+                )}
                 <th className="px-4 md:px-8 py-4 md:py-6 text-left text-[9px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em]">Joined</th>
                 <th className="px-4 md:px-8 py-4 md:py-6 text-left text-[9px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em]">KYC State</th>
                 <th className="px-4 md:px-8 py-4 md:py-6 text-left text-[9px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em]">Invited By</th>
@@ -203,13 +376,13 @@ const AdminDevotees = () => {
             <tbody className="divide-y divide-white/5">
               {usersLoading ? (
                 <tr>
-                  <td colSpan="6" className="px-4 md:px-8">
+                  <td colSpan={isKyc ? 5 : 6} className="px-4 md:px-8">
                     <LoadingScreen variant="inline" size="sm" message="Consulting Akashic Records..." />
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-8 py-20 text-center text-white/30 font-medium tracking-widest uppercase text-[10px]">
+                  <td colSpan={isKyc ? 5 : 6} className="px-8 py-20 text-center text-white/30 font-medium tracking-widest uppercase text-[10px]">
                     No devotees found.
                   </td>
                 </tr>
@@ -236,6 +409,7 @@ const AdminDevotees = () => {
                         </div>
                       </div>
                     </td>
+                    {!isKyc && (
                     <td className="px-4 md:px-8 py-4 md:py-6 whitespace-nowrap">
                       <span
                         className={`${adminStyles.roleBase} ${
@@ -249,6 +423,7 @@ const AdminDevotees = () => {
                         {u.role}
                       </span>
                     </td>
+                    )}
                     <td className="px-4 md:px-8 py-4 md:py-6 whitespace-nowrap">
                       <div className="flex items-center gap-2.5 text-[10px] text-white/40 font-bold uppercase tracking-widest">
                         <Calendar size={14} className="text-[#FBDB8C]/40" />
@@ -268,6 +443,14 @@ const AdminDevotees = () => {
                         {u.kyc_status === 'APPROVED' ? <CheckCircle size={10} /> : <Clock size={10} />}
                         {u.kyc_status || 'PENDING'}
                       </span>
+                      {isKyc && u.kyc_status === 'REJECTED' && u.kyc_rejection_reason && (
+                        <div
+                          className="mt-1.5 text-[9px] text-rose-300/60 font-bold tracking-wide max-w-[200px] truncate"
+                          title={u.kyc_rejection_reason}
+                        >
+                          {u.kyc_rejection_reason}
+                        </div>
+                      )}
                       {u.kyc_reviewed_by_name && (
                         <div className="mt-1.5 text-[9px] text-white/25 font-bold tracking-wide">
                           by {u.kyc_reviewed_by_name}
@@ -289,6 +472,7 @@ const AdminDevotees = () => {
                               <FileText size={10} /> Docs
                             </button>
                           )}
+                          {!isKyc && (
                           <button
                             type="button"
                             onClick={() => openEditUserModal(u)}
@@ -296,8 +480,19 @@ const AdminDevotees = () => {
                           >
                             <Edit size={10} /> Edit
                           </button>
+                          )}
                         </div>
-                        {u.kyc_status !== 'APPROVED' && (
+                        {/* Password reset — ADMIN only (account-takeover power). */}
+                        {!isKyc && isAdmin && u.id !== currentUser?.id && (
+                          <button
+                            type="button"
+                            onClick={() => openPwModal(u)}
+                            className="text-[9px] w-full justify-center px-3 py-2 bg-white/5 text-white/60 border border-white/10 rounded-lg font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all flex items-center gap-1.5"
+                          >
+                            <KeyRound size={10} /> Reset Password
+                          </button>
+                        )}
+                        {isKyc && u.kyc_status !== 'APPROVED' && (
                           <div className="flex items-center gap-2 w-full">
                             <button
                               type="button"
@@ -317,7 +512,7 @@ const AdminDevotees = () => {
                         )}
                         {/* Role assignment — ADMIN only (a god-power STAFF must never have).
                             This is how you promote a devotee to STAFF. */}
-                        {isAdmin && u.id !== currentUser?.id && (
+                        {!isKyc && isAdmin && u.id !== currentUser?.id && (
                           <select
                             value={u.role}
                             onChange={(e) =>
@@ -421,7 +616,7 @@ const AdminDevotees = () => {
               >
                 Return
               </button>
-              {kycViewUser.kyc_status !== 'APPROVED' && (
+              {isKyc && kycViewUser.kyc_status !== 'APPROVED' && (
                 <>
                   <button
                     type="button"
@@ -498,6 +693,98 @@ const AdminDevotees = () => {
               >
                 {editUserLoading ? 'Saving...' : 'Save Changes'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {pwModal.isOpen && (
+        <div className={commonStyles.modalOverlay} onClick={closePwModal}>
+          <div
+            className="bg-[#060B28] border border-[#FBDB8C]/30 rounded-3xl p-8 max-w-sm w-full shadow-[0_0_60px_rgba(0,0,0,0.8)] relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-serif font-black text-[#FBDB8C] tracking-widest uppercase mb-1">
+              Reset Password
+            </h3>
+            <p className="text-[10px] text-white/40 font-bold uppercase tracking-[0.15em] mb-5 break-all">
+              {pwModal.user?.full_name} — {pwModal.user?.email}
+            </p>
+
+            {pwDone ? (
+              <div className="space-y-4 mb-6">
+                <p className="text-sm text-emerald-400">Password updated. Share it with the devotee securely:</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-white/5 border border-[#FBDB8C]/20 rounded-xl px-4 py-3 text-sm text-white font-mono break-all select-all">
+                    {pwDone}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard?.writeText(pwDone)}
+                    className={commonStyles.buttonSecondary + ' !px-4 !py-3'}
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 mb-6">
+                <label className="text-[10px] font-black text-[#FBDB8C]/40 uppercase tracking-[0.2em] mb-2 block">
+                  New Password (min 6)
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={pwVisible ? 'text' : 'password'}
+                      value={pwModal.password}
+                      onChange={(e) => setPwModal({ ...pwModal, password: e.target.value })}
+                      maxLength={72}
+                      autoComplete="new-password"
+                      className="w-full bg-white/5 border border-[#FBDB8C]/10 rounded-xl pl-4 pr-10 py-3 text-sm text-white font-mono focus:border-[#FBDB8C]/40 outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPwVisible((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                      title={pwVisible ? 'Hide' : 'Show'}
+                    >
+                      {pwVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPwModal({ ...pwModal, password: generatePassword() })}
+                    title="Generate new password"
+                    className="p-3 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    <RefreshCw size={14} />
+                  </button>
+                </div>
+                <p className="text-[10px] text-white/30">
+                  The devotee's old password stops working immediately.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closePwModal}
+                className={commonStyles.buttonSecondary + ' !px-6 !py-3'}
+              >
+                {pwDone ? 'Done' : 'Cancel'}
+              </button>
+              {!pwDone && (
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={pwLoading || pwModal.password.length < 6}
+                  className="px-6 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all active:scale-95 text-[9px] disabled:opacity-40"
+                >
+                  {pwLoading ? 'Saving...' : 'Reset Password'}
+                </button>
+              )}
             </div>
           </div>
         </div>

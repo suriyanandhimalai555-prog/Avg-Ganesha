@@ -15,6 +15,7 @@ import AdminSevaEntry from './pages/admin/AdminSevaEntry';
 import AdminKycEntry from './pages/admin/AdminKycEntry';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminStatueNumbers from './pages/admin/AdminStatueNumbers';
+import AdminCoinHoldings from './pages/admin/AdminCoinHoldings';
 import DashboardLayout from './components/DashboardLayout';
 import PlansPage from './pages/PlansPage';
 import NetworkPage from './pages/NetworkPage';
@@ -68,12 +69,14 @@ function AppContent() {
         }
       >
         <Route index element={<AdminDashboard />} />
-        <Route path="devotees" element={<AdminDevotees />} />
+        <Route path="devotees" element={<AdminDevotees key="directory" mode="directory" />} />
+        <Route path="kyc" element={<AdminDevotees key="kyc" mode="kyc" />} />
         <Route path="invite-tree" element={<AdminInviteTree />} />
         <Route path="seva" element={<AdminSeva />} />
         <Route path="seva-entry" element={<AdminSevaEntry />} />
         <Route path="kyc-entry" element={<AdminKycEntry />} />
         <Route path="statue-numbers" element={<AdminStatueNumbers />} />
+        <Route path="coin-holdings" element={<AdminCoinHoldings />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 

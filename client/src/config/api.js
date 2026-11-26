@@ -25,5 +25,7 @@ export const API_ROUTES = Object.freeze({
     ADMIN_ENTRY: '/api/donations/admin/entry',
     ADMIN_STATUE_NUMBERS: '/api/donations/admin/statue-numbers',
     ADMIN_UPDATE_STATUE_NUMBER: (id) => `/api/donations/admin/statue-number/${id}`,
+    ADMIN_DATE_CHANGE_PREVIEW: (id) => `/api/donations/admin/${id}/date-change`,
+    ADMIN_CHANGE_DATE: (id) => `/api/donations/admin/${id}/date`,
   },
 });

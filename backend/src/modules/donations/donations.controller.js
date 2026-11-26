@@ -4,6 +4,16 @@
 import { query, withTransaction } from '../../shared/db.js';
 import { uploadToS3 } from '../../shared/s3.js';
 import { getCachedData, invalidateCache } from '../../shared/redis.js';
+import {
+  STATUE_SLUG,
+  STATUE_COIN_SOURCE,
+  STATUE_15FT_LOCK_YEARS,
+  statueCoinReward,
+  istDateString,
+  istTimeString,
+  istToday,
+  isValidIsoDate,
+} from './coinRules.js';
 
 const CACHE_KEYS = {
   CATEGORIES: 'donations:categories',
@@ -11,81 +21,61 @@ const CACHE_KEYS = {
   ADMIN_STATS: 'admin:stats'
 };
 
-// AVG Coin reward for the 1.5 Ft Statue seva.
-// Promotional rate: 500 coins for seva purchased up to 7 Sep 2026 (inclusive).
-// Standard rate   : 100 coins from 8 Sep 2026 onward.
-// Coins are locked (non-withdrawable) for 5 years from the donation purchase date.
-const STATUE_15FT_COIN_REWARD       = 100;          // standard rate (8 Sep 2026 onward)
-const STATUE_15FT_COIN_REWARD_PROMO = 500;          // promotional rate (up to 7 Sep 2026)
-const STATUE_COIN_CUTOFF            = '2026-09-08'; // first day of the 100-coin standard rate
-const STATUE_15FT_LOCK_YEARS = 5;
-const STATUE_SLUG = 'statue_1_5_ft';
-
-// Return the correct coin reward based on the donation's purchase date (created_at).
-// Seva purchased before the cutoff (on/before 7 Sep 2026) → 500; from 8 Sep 2026 → 100.
-// Both date-only strings ("YYYY-MM-DD") and full ISO timestamps are handled correctly
-// because JS parses date-only strings as UTC midnight, consistent with our cutoff constant.
-function statueCoinReward(purchaseDate) {
-  return new Date(purchaseDate) < new Date(STATUE_COIN_CUTOFF)
-    ? STATUE_15FT_COIN_REWARD_PROMO
-    : STATUE_15FT_COIN_REWARD;
-}
+// Coin rules (rates, IST cutoff, 5-year lock) live in coinRules.js — one source of truth.
 
 // Assign the statue seat number and award AVG coins for a confirmed 1.5 Ft Statue
-// donation, both inside a single transaction.
+// donation. MUST be called with a client inside an open transaction (withTransaction)
+// so the status change, seat number and coin row commit or roll back together.
 //
-// Race-safety: we lock the user row (SELECT ... FOR UPDATE) as a per-user mutex.
-// Because the user row always exists, the lock is always acquired — unlike locking
-// donation rows with statue_number IS NOT NULL, which acquires nothing when the user
-// has no prior statue rows and leaves two concurrent first-confirmations unprotected.
+// Race-safety: we lock the user row (SELECT ... FOR UPDATE) as a per-user mutex, which
+// serialises concurrent statue confirmations for the same devotee.
 //
-// Both writes sharing one transaction means a coin-award failure can never leave a
-// committed statue number with no corresponding coin row.
-//
-// coinAmount — optional. When provided by an admin entry, the admin-selected amount is
-// used instead of the automatic date-based rate. Pass 0 to assign the seat but skip
-// the coin award (once-per-devotee guard still holds for future calls).
-// When omitted (undefined), defaults to the automatic rate via statueCoinReward().
-//
-// Called by reviewDonation (no coinAmount → auto rate) and createAdminEntry (passes override).
-async function confirmStatueSeva(donation, coinAmount = statueCoinReward(donation.created_at)) {
-  await withTransaction(async (client) => {
-    // Per-user mutex: serialises all concurrent statue confirmations for this devotee.
-    await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [donation.user_id]);
+// coinAmount — optional. undefined → automatic date-based rate (statueCoinReward).
+// 0 → seat assigned and a 0-coin ledger row is written, so the once-per-devotee rule
+// holds (a later statue seva won't silently award coins the admin chose to skip).
+// N → exactly N coins.
+async function confirmStatueSeva(client, donation, coinAmount) {
+  const amount = coinAmount === undefined ? statueCoinReward(donation.created_at) : coinAmount;
 
-    // Assign seat number on first confirmed statue only.
-    const existing = await client.query(
-      `SELECT statue_number FROM donations
-       WHERE user_id = $1 AND status = 'CONFIRMED' AND statue_number IS NOT NULL AND id <> $2
-       LIMIT 1`,
-      [donation.user_id, donation.id]
+  await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [donation.user_id]);
+
+  // Assign seat number on first confirmed statue only.
+  const existing = await client.query(
+    `SELECT statue_number FROM donations
+     WHERE user_id = $1 AND status = 'CONFIRMED' AND statue_number IS NOT NULL AND id <> $2
+     LIMIT 1`,
+    [donation.user_id, donation.id]
+  );
+  if (existing.rows.length === 0) {
+    await client.query(
+      `UPDATE donations SET statue_number = nextval('statue_number_seq')
+       WHERE id = $1 AND statue_number IS NULL`,
+      [donation.id]
     );
-    if (existing.rows.length === 0) {
-      await client.query(
-        `UPDATE donations SET statue_number = nextval('statue_number_seq')
-         WHERE id = $1 AND statue_number IS NULL`,
-        [donation.id]
-      );
-    }
+  }
 
-    // Award coins — once per devotee, locked 5 yrs from seva date.
-    // Skip the INSERT entirely when coinAmount is 0 (admin opted out of coins).
-    // The user-row lock above makes the NOT EXISTS check atomic with the INSERT for the same user.
-    if (coinAmount > 0) {
-      await client.query(
-        `INSERT INTO user_avg_coins
-           (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
-         SELECT $1, $2, $3, 'STATUE_1_5_FT_DONATION', $4,
-                ($4::timestamptz + ($5 || ' years')::interval), FALSE
-         WHERE NOT EXISTS (
-           SELECT 1 FROM user_avg_coins
-           WHERE user_id = $1 AND source = 'STATUE_1_5_FT_DONATION'
-         )
-         ON CONFLICT (donation_id) DO NOTHING`,
-        [donation.user_id, donation.id, coinAmount, donation.created_at, STATUE_15FT_LOCK_YEARS]
-      );
-    }
-  });
+  // Award coins — once per devotee, locked 5 yrs from the seva date.
+  await client.query(
+    `INSERT INTO user_avg_coins
+       (user_id, donation_id, amount, source, earned_at, locked_until, is_withdrawable)
+     SELECT $1, $2, $3, $6, $4,
+            ($4::timestamptz + ($5 || ' years')::interval), FALSE
+     WHERE NOT EXISTS (
+       SELECT 1 FROM user_avg_coins
+       WHERE user_id = $1 AND source = $6
+     )
+     ON CONFLICT (donation_id) DO NOTHING`,
+    [donation.user_id, donation.id, amount, donation.created_at, STATUE_15FT_LOCK_YEARS, STATUE_COIN_SOURCE]
+  );
+}
+
+// Parse the optional `coins` override sent by the console.
+// Returns undefined (auto), a non-negative integer, or NaN (invalid).
+function parseCoinOverride(raw) {
+  if (raw === undefined) return undefined;
+  if (raw === '' || raw === null) return 0;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : NaN;
 }
 
 
@@ -125,55 +115,45 @@ export const getCategories = async (req, res) => {
 // --- Submit donation (requires auth + KYC approved) ---
 export const submitDonation = async (req, res) => {
   const categoryId = req.body.categoryId ?? req.body.category_id;
-  const amount = req.body.amount;
+  const amount = Number(req.body.amount);
   const user_id = req.user.id;
 
   try {
     if (!categoryId) {
       return res.status(400).json({ error: 'Category ID is required' });
     }
-
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'A valid positive amount is required' });
+    }
     if (!req.file) {
       return res.status(400).json({ error: 'Payment proof is required' });
     }
 
-    // Upload payment proof to S3
-    const paymentProofUrl = await uploadToS3(req.file.path, 'proofs');
+    // KYC must be approved before a devotee can offer seva (the UI already gates this;
+    // enforce it server-side too).
+    const kycRes = await query('SELECT kyc_status FROM users WHERE id = $1', [user_id]);
+    if (kycRes.rows[0]?.kyc_status !== 'APPROVED') {
+      return res.status(403).json({ error: 'KYC must be approved before offering seva' });
+    }
 
-    // Force cast to integer to be safe
     const categoryCheck = await query(
-      'SELECT name, slug FROM donation_categories WHERE id = $1::int',
+      'SELECT name, slug FROM donation_categories WHERE id = $1::int AND is_active = true',
       [categoryId]
     );
-
-    const category = categoryCheck.rows[0];
-
-    if (!category) {
+    if (!categoryCheck.rows[0]) {
       return res.status(400).json({ error: `No category found for id: ${categoryId}` });
     }
 
-    const isStatue = category.slug === STATUE_SLUG;
+    // Upload only after validation passes so we never orphan S3 objects.
+    // statue_number is assigned at CONFIRMATION, never here.
+    const paymentProofUrl = await uploadToS3(req.file.path, 'proofs');
 
-    let result;
-    if (isStatue) {
-      // statue_number is assigned at CONFIRMATION, not here — so submissions never
-      // consume a sequence value and rejections can never create gaps.
-      result = await query(
-        `INSERT INTO donations (
-           user_id, category_id, amount, payment_proof_path, statue_number, status
-         ) VALUES ($1, $2, $3, $4, NULL, 'PENDING') RETURNING *`,
-        [user_id, categoryId, amount, paymentProofUrl]
-      );
-    } else {
-      result = await query(
-        `INSERT INTO donations (
-          user_id, category_id, amount, payment_proof_path, status
-        ) VALUES ($1, $2, $3, $4, 'PENDING') RETURNING *`,
-        [user_id, categoryId, amount, paymentProofUrl]
-      );
-    }
+    const result = await query(
+      `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, status)
+       VALUES ($1, $2, $3, $4, 'PENDING') RETURNING *`,
+      [user_id, categoryId, amount, paymentProofUrl]
+    );
 
-    // Invalidate admin stats cache (new pending donation)
     await invalidateCache(CACHE_KEYS.ADMIN_STATS);
 
     res.status(201).json({
@@ -182,7 +162,7 @@ export const submitDonation = async (req, res) => {
     });
   } catch (err) {
     console.error('Error submitting donation:', err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
@@ -336,36 +316,45 @@ export const reviewDonation = async (req, res) => {
   const { donationId } = req.params;
   const { status, rejectionReason } = req.body;
 
+  // Optional AVG-coin override for a confirmed 1.5 Ft statue seva.
+  // absent → automatic date-based rate; '' / null / 0 → no coins; N → exactly N.
+  const coinOverride = parseCoinOverride(req.body.coins);
+
   if (!['CONFIRMED', 'REJECTED'].includes(status)) {
     return res.status(400).json({ error: 'Status must be CONFIRMED or REJECTED' });
   }
+  if (Number.isNaN(coinOverride)) {
+    return res.status(400).json({ error: 'coins must be a non-negative integer' });
+  }
 
   try {
-    const updateResult = await query(
-      `UPDATE donations SET status = $1, rejection_reason = $2, reviewed_by = $3, updated_at = NOW()
-       WHERE id = $4 AND status = 'PENDING'
-       RETURNING id, user_id, category_id, created_at`,
-      [status, status === 'REJECTED' ? rejectionReason || null : null, req.user.id, donationId]
-    );
-    if (updateResult.rows.length === 0) {
+    // Status change + seat number + coin award commit together or not at all.
+    const found = await withTransaction(async (client) => {
+      const updateResult = await client.query(
+        `UPDATE donations SET status = $1, rejection_reason = $2, reviewed_by = $3, updated_at = NOW()
+         WHERE id = $4 AND status = 'PENDING'
+         RETURNING id, user_id, category_id, created_at`,
+        [status, status === 'REJECTED' ? rejectionReason || null : null, req.user.id, donationId]
+      );
+      if (updateResult.rows.length === 0) return false;
+
+      if (status === 'CONFIRMED') {
+        const donation = updateResult.rows[0];
+        const categoryRes = await client.query(
+          'SELECT slug FROM donation_categories WHERE id = $1::int',
+          [donation.category_id]
+        );
+        if (categoryRes.rows[0]?.slug === STATUE_SLUG) {
+          await confirmStatueSeva(client, donation, coinOverride);
+        }
+      }
+      return true;
+    });
+
+    if (!found) {
       return res.status(404).json({ error: 'Donation not found or already reviewed' });
     }
 
-    // On CONFIRMED 1.5 Ft Statue donation: assign a seat number (first time only)
-    // then award 100 AVG coins locked for 5 years from the purchase date (created_at).
-    // Coin award is idempotent via UNIQUE(donation_id).
-    if (status === 'CONFIRMED') {
-      const donation = updateResult.rows[0];
-      const categoryRes = await query(
-        'SELECT slug FROM donation_categories WHERE id = $1::int',
-        [donation.category_id]
-      );
-      if (categoryRes.rows[0]?.slug === STATUE_SLUG) {
-        await confirmStatueSeva(donation);
-      }
-    }
-
-    // Invalidate relevant caches
     await Promise.all([
       invalidateCache(CACHE_KEYS.GLOBAL_STATUE_COUNT),
       invalidateCache(CACHE_KEYS.ADMIN_STATS)
@@ -389,22 +378,9 @@ export const createAdminEntry = async (req, res) => {
   const amount = parseFloat(req.body.amount);
   const status = (req.body.status || 'CONFIRMED').toUpperCase();
   const actorId = req.user.id; // ADMIN or STAFF who recorded this entry (attribution)
-  // Optional backdated seva date (YYYY-MM-DD). When supplied, overrides created_at so the
-  // entry is stamped with the actual seva date and earns the correct coin reward (500 vs 100).
+  // Optional backdated seva date (YYYY-MM-DD, IST calendar date).
   const rawDate = req.body.purchaseDate || req.body.date || null;
-
-  // Optional AVG-coin override for a confirmed 1.5 Ft statue seva (admin picks the amount).
-  // Absent / not sent → undefined → confirmStatueSeva uses the automatic date-based rate.
-  // Sent as '' or '0'  → 0       → seat is assigned but no coins are awarded.
-  // Sent as '250' etc. → 250     → that exact amount is used.
-  let coinOverride; // undefined = fall back to the automatic statueCoinReward() default
-  if (req.body.coins !== undefined) {
-    if (req.body.coins === '' || req.body.coins === null) {
-      coinOverride = 0;
-    } else {
-      coinOverride = parseInt(req.body.coins, 10);
-    }
-  }
+  const coinOverride = parseCoinOverride(req.body.coins);
 
   try {
     if (!userId || !categoryId) {
@@ -416,30 +392,29 @@ export const createAdminEntry = async (req, res) => {
     if (!['CONFIRMED', 'PENDING'].includes(status)) {
       return res.status(400).json({ error: "status must be CONFIRMED or PENDING" });
     }
-    if (coinOverride !== undefined && (Number.isNaN(coinOverride) || coinOverride < 0)) {
+    if (Number.isNaN(coinOverride)) {
       return res.status(400).json({ error: 'coins must be a non-negative integer' });
     }
 
-    // Validate optional purchase date — must be a valid date and not in the future.
+    // Optional purchase date — strict YYYY-MM-DD, not after today (IST).
     let purchaseDateTs = null;
     if (rawDate) {
-      const d = new Date(rawDate);
-      if (isNaN(d.getTime())) {
+      if (!isValidIsoDate(rawDate)) {
         return res.status(400).json({ error: 'Invalid purchaseDate — use YYYY-MM-DD.' });
       }
-      if (d > new Date()) {
+      if (rawDate > istToday()) {
         return res.status(400).json({ error: 'purchaseDate cannot be in the future.' });
       }
-      purchaseDateTs = d.toISOString(); // stored as UTC midnight of the chosen calendar date
+      // Stored as UTC midnight of the chosen date (= 05:30 IST the same calendar day),
+      // matching entries recorded before this change.
+      purchaseDateTs = `${rawDate}T00:00:00.000Z`;
     }
 
-    // Validate devotee exists
     const userRes = await query('SELECT id FROM users WHERE id = $1::int', [userId]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ error: 'Devotee not found' });
     }
 
-    // Validate category
     const categoryRes = await query(
       'SELECT id, name, slug FROM donation_categories WHERE id = $1::int',
       [categoryId]
@@ -448,42 +423,24 @@ export const createAdminEntry = async (req, res) => {
     if (!category) {
       return res.status(400).json({ error: `No category found for id: ${categoryId}` });
     }
-
     const isStatue = category.slug === STATUE_SLUG;
 
     // Upload proof only after all validation passes so we never orphan S3 objects.
     const paymentProofPath = req.file ? await uploadToS3(req.file.path, 'proofs') : '';
 
-    // Insert donation. statue_number is always NULL at insert; it is assigned at
-    // confirmation below (no gaps from rejected entries — see confirmStatueSeva).
-    // When purchaseDateTs is provided, it is written into created_at so the backdated
-    // entry earns the correct coin reward and has the correct 5-year lock window.
-    const extraCols  = purchaseDateTs ? ', created_at'      : '';
-    const extraParam = purchaseDateTs ? ', $7::timestamptz' : '';
-    const extraVals  = purchaseDateTs ? [purchaseDateTs]    : [];
-
-    let donation;
-    if (isStatue) {
-      const insertRes = await query(
-        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, statue_number, status, recorded_by${extraCols})
-         VALUES ($1, $2, $3, $4, NULL, $5, $6${extraParam}) RETURNING *`,
-        [userId, categoryId, amount, paymentProofPath, status, actorId, ...extraVals]
+    // Insert + (for a confirmed statue) seat number + coins in ONE transaction.
+    const donation = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, status, recorded_by, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, NOW())) RETURNING *`,
+        [userId, categoryId, amount, paymentProofPath, status, actorId, purchaseDateTs]
       );
-      donation = insertRes.rows[0];
-    } else {
-      const result = await query(
-        `INSERT INTO donations (user_id, category_id, amount, payment_proof_path, status, recorded_by${extraCols})
-         VALUES ($1, $2, $3, $4, $5, $6${extraParam}) RETURNING *`,
-        [userId, categoryId, amount, paymentProofPath, status, actorId, ...extraVals]
-      );
-      donation = result.rows[0];
-    }
-
-    // Assign seat number + award coins for a confirmed statue seva.
-    // coinOverride: undefined → auto rate; 0 → seat assigned, no coins; N → N coins.
-    if (status === 'CONFIRMED' && isStatue) {
-      await confirmStatueSeva(donation, coinOverride);
-    }
+      const row = insertRes.rows[0];
+      if (status === 'CONFIRMED' && isStatue) {
+        await confirmStatueSeva(client, row, coinOverride);
+      }
+      return row;
+    });
 
     await Promise.all([
       invalidateCache(CACHE_KEYS.GLOBAL_STATUE_COUNT),
@@ -508,7 +465,7 @@ export const getStatueNumbers = async (_req, res) => {
   try {
     const result = await query(
       `SELECT d.id AS donation_id, d.statue_number, d.status, d.created_at,
-              u.id AS user_id, u.full_name, u.email
+              u.id AS user_id, u.full_name, u.email, u.phone_number, u.kyc_status
        FROM donations d
        JOIN users u ON u.id = d.user_id
        JOIN donation_categories dc ON dc.id = d.category_id
@@ -658,5 +615,232 @@ export const getMyCoins = async (req, res) => {
   } catch (err) {
     console.error('Get my coins error:', err);
     res.status(500).json({ error: 'Failed to fetch AVG coins' });
+  }
+};
+
+// ============================================================================
+// Admin: change a seva's date (donations.created_at) — with AVG coin recalculation
+// ============================================================================
+//
+// The seva date drives the statue coin rate (500 up to 7 Sep 2026 IST, 100 after)
+// and the 5-year lock. Changing it therefore:
+//   • moves donations.created_at to the new IST calendar date, keeping the original
+//     time of day (so ordering within a day is unchanged);
+//   • for a 1.5 Ft statue seva that already has a coin row:
+//       – re-dates the coin row (earned_at) and its lock (locked_until = date + 5 yrs);
+//       – if the row holds the AUTOMATIC rate for the old date, re-prices it to the
+//         automatic rate for the new date (claw-back 500→100, or top-up 100→500);
+//       – if the row holds an admin-chosen (override) amount, keeps that amount unless
+//         the admin explicitly ticks "recalculate" (recalculate=true);
+//   • for a PENDING statue seva: nothing to re-price yet — the new date's rate applies
+//     automatically when it is confirmed;
+//   • statue seat numbers are never touched;
+//   • every change is written to donation_audit_log (who, when, old → new).
+//
+// planSevaDateChange() is the single source for both the preview and the apply, so
+// what the admin sees in the confirm dialog is exactly what gets written.
+
+async function planSevaDateChange(db, donationId, newDate, recalculate, lock = false) {
+  const donRes = await db.query(
+    `SELECT d.id, d.user_id, d.status, d.amount, d.created_at, d.statue_number,
+            dc.slug AS category_slug, dc.name AS category_name, u.full_name
+     FROM donations d
+     JOIN donation_categories dc ON dc.id = d.category_id
+     JOIN users u ON u.id = d.user_id
+     WHERE d.id = $1
+     ${lock ? 'FOR UPDATE OF d' : ''}`,
+    [donationId]
+  );
+  const d = donRes.rows[0];
+  if (!d) {
+    const err = new Error('Seva not found');
+    err.status = 404;
+    throw err;
+  }
+
+  const oldDate = istDateString(d.created_at);
+  // New instant = new IST calendar date + original IST time of day.
+  const newCreatedAt = new Date(`${newDate}T${istTimeString(d.created_at)}+05:30`).toISOString();
+  const isStatue = d.category_slug === STATUE_SLUG;
+
+  const plan = {
+    donationId: d.id,
+    devoteeName: d.full_name,
+    categoryName: d.category_name,
+    status: d.status,
+    isStatue,
+    oldDate,
+    newDate,
+    oldCreatedAt: new Date(d.created_at).toISOString(),
+    newCreatedAt,
+    unchanged: oldDate === newDate,
+    coin: null, // filled for statue seva below
+  };
+
+  if (!isStatue) return plan;
+
+  const oldAutoRate = statueCoinReward(d.created_at);
+  const newAutoRate = statueCoinReward(newCreatedAt);
+
+  const coinRes = await db.query(
+    `SELECT id, amount, earned_at, locked_until,
+            ($2::timestamptz + ($3 || ' years')::interval) AS new_locked_until
+     FROM user_avg_coins WHERE donation_id = $1
+     ${lock ? 'FOR UPDATE' : ''}`,
+    [d.id, newCreatedAt, STATUE_15FT_LOCK_YEARS]
+  );
+  const c = coinRes.rows[0];
+
+  if (!c) {
+    plan.coin = {
+      hasRow: false,
+      oldAutoRate,
+      newAutoRate,
+      // PENDING: the new date's rate applies when the seva is confirmed.
+      // CONFIRMED with no row: the devotee's one-time statue coins sit on another seva.
+      note:
+        d.status === 'PENDING'
+          ? `No coins yet. When confirmed, the rate for the new date applies: ${newAutoRate} coins.`
+          : d.status === 'CONFIRMED'
+          ? 'No coins on this seva (the devotee\'s one-time statue coins are on another seva, or none were awarded). No coin change.'
+          : 'Rejected seva — no coins. No coin change.',
+    };
+    return plan;
+  }
+
+  const currentAmount = parseFloat(c.amount);
+  const wasAutomatic = currentAmount === oldAutoRate;
+  // Default: re-price automatic rows; keep admin overrides unless explicitly asked.
+  const doRecalc = recalculate === undefined ? wasAutomatic : Boolean(recalculate);
+  const newAmount = doRecalc ? newAutoRate : currentAmount;
+
+  plan.coin = {
+    hasRow: true,
+    coinRowId: c.id,
+    currentAmount,
+    oldAutoRate,
+    newAutoRate,
+    wasAutomatic,
+    recalculate: doRecalc,
+    newAmount,
+    delta: newAmount - currentAmount, // negative = claw-back
+    oldLockedUntil: new Date(c.locked_until).toISOString(),
+    newLockedUntil: new Date(c.new_locked_until).toISOString(),
+  };
+  return plan;
+}
+
+function readDateChangeInput(req) {
+  const newDate = req.body?.date ?? req.query?.date;
+  const rawRecalc = req.body?.recalculate ?? req.query?.recalculate;
+  const recalculate =
+    rawRecalc === undefined || rawRecalc === '' ? undefined : rawRecalc === true || rawRecalc === 'true';
+  if (!isValidIsoDate(newDate)) {
+    const err = new Error('date must be a valid YYYY-MM-DD date');
+    err.status = 400;
+    throw err;
+  }
+  if (newDate > istToday()) {
+    const err = new Error('Seva date cannot be in the future');
+    err.status = 400;
+    throw err;
+  }
+  if (newDate < '2000-01-01') {
+    const err = new Error('Seva date is too far in the past');
+    err.status = 400;
+    throw err;
+  }
+  return { newDate, recalculate };
+}
+
+// GET /api/donations/admin/:donationId/date-change?date=YYYY-MM-DD[&recalculate=true|false]
+// Read-only preview of exactly what a date change will do.
+export const previewSevaDateChange = async (req, res) => {
+  try {
+    if (!/^\d+$/.test(String(req.params.donationId))) {
+      return res.status(400).json({ error: 'Invalid seva id' });
+    }
+    const { newDate, recalculate } = readDateChangeInput(req);
+    const plan = await planSevaDateChange({ query }, parseInt(req.params.donationId, 10), newDate, recalculate);
+    res.json(plan);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('Preview seva date change error:', err);
+    res.status(500).json({ error: 'Failed to preview date change' });
+  }
+};
+
+// PATCH /api/donations/admin/:donationId/date   body: { date, recalculate? }
+export const changeSevaDate = async (req, res) => {
+  try {
+    if (!/^\d+$/.test(String(req.params.donationId))) {
+      return res.status(400).json({ error: 'Invalid seva id' });
+    }
+    const { newDate, recalculate } = readDateChangeInput(req);
+    const donationId = parseInt(req.params.donationId, 10);
+
+    const plan = await withTransaction(async (client) => {
+      const p = await planSevaDateChange(client, donationId, newDate, recalculate, true);
+      if (p.unchanged) return p;
+
+      await client.query(
+        `UPDATE donations SET created_at = $1::timestamptz, updated_at = NOW() WHERE id = $2`,
+        [p.newCreatedAt, p.donationId]
+      );
+
+      if (p.coin?.hasRow) {
+        await client.query(
+          `UPDATE user_avg_coins
+           SET amount = $1, earned_at = $2::timestamptz, locked_until = $3::timestamptz
+           WHERE id = $4`,
+          [p.coin.newAmount, p.newCreatedAt, p.coin.newLockedUntil, p.coin.coinRowId]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO donation_audit_log
+           (donation_id, action, changed_by, old_value, new_value, coin_old, coin_new, note)
+         VALUES ($1, 'DATE_CHANGE', $2, $3, $4, $5, $6, $7)`,
+        [
+          p.donationId,
+          req.user.id,
+          p.oldCreatedAt,
+          p.newCreatedAt,
+          p.coin?.hasRow ? p.coin.currentAmount : null,
+          p.coin?.hasRow ? p.coin.newAmount : null,
+          p.coin?.hasRow
+            ? `Seva date ${p.oldDate} → ${p.newDate}; coins ${p.coin.currentAmount} → ${p.coin.newAmount}` +
+              (p.coin.recalculate ? ' (recalculated)' : ' (amount kept)')
+            : `Seva date ${p.oldDate} → ${p.newDate}`,
+        ]
+      );
+      return p;
+    });
+
+    if (plan.unchanged) {
+      return res.json({ ...plan, message: 'Date unchanged — nothing to do.' });
+    }
+
+    await Promise.all([
+      invalidateCache(CACHE_KEYS.ADMIN_STATS),
+      invalidateCache(CACHE_KEYS.GLOBAL_STATUE_COUNT),
+    ]);
+
+    let message = `Seva date changed ${plan.oldDate} → ${plan.newDate}.`;
+    if (plan.coin?.hasRow) {
+      const { delta, currentAmount, newAmount } = plan.coin;
+      message +=
+        delta < 0
+          ? ` Clawed back ${-delta} AVG coins (${currentAmount} → ${newAmount}).`
+          : delta > 0
+          ? ` Added ${delta} AVG coins (${currentAmount} → ${newAmount}).`
+          : ` Coins unchanged (${newAmount}).`;
+      message += ' Lock re-dated to 5 years from the new date.';
+    }
+    res.json({ ...plan, message });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('Change seva date error:', err);
+    res.status(500).json({ error: 'Failed to change seva date' });
   }
 };

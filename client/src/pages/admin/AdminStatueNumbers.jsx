@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Hash, Pencil, X } from 'lucide-react';
+import { AlertTriangle, Check, Download, Hash, Pencil, X } from 'lucide-react';
 import api from '../../api/axios';
 import { API_ROUTES } from '../../config/api';
 import {
   AdminCard,
+  AdminFilterChips,
   AdminPageHeader,
   AdminSearchInput,
 } from './AdminChrome';
 import { commonStyles } from '../../styles/index.styles';
+import { toCsv, downloadFile } from '../../utils/csv';
 
 /*
   Statue Numbers admin page
@@ -16,7 +18,7 @@ import { commonStyles } from '../../styles/index.styles';
   the admin correct/reassign individual numbers.
 
   Data model from the API:
-    { donation_id, statue_number, status, created_at, user_id, full_name, email }
+    { donation_id, statue_number, status, created_at, user_id, full_name, email, phone_number, kyc_status }
 
   "Numbered" rows  → statue_number IS NOT NULL (may be CONFIRMED, REJECTED, PENDING)
   "Unnumbered"     → statue_number IS NULL AND status = 'CONFIRMED'  (bug victims)
@@ -38,6 +40,21 @@ const StatusBadge = ({ status }) => {
   return (
     <span className={`inline-block px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border rounded-full ${cfg}`}>
       {status}
+    </span>
+  );
+};
+
+// ── KYC badge ────────────────────────────────────────────────────────────────
+const KycBadge = ({ status }) => {
+  const cfg = {
+    APPROVED:  'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    SUBMITTED: 'bg-blue-500/20    text-blue-400    border-blue-500/30',
+    REJECTED:  'bg-red-500/20     text-red-400     border-red-500/30',
+    PENDING:   'bg-white/10       text-white/40    border-white/10',
+  }[status] || 'bg-white/10 text-white/40 border-white/10';
+  return (
+    <span className={`inline-block px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border rounded-full ${cfg}`}>
+      {status || '—'}
     </span>
   );
 };
@@ -188,11 +205,13 @@ const EditModal = ({ row, onClose, onSaved }) => {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 const AdminStatueNumbers = () => {
-  const [rows, setRows]       = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [search, setSearch]   = useState('');
-  const [editRow, setEditRow] = useState(null); // row being edited, or null
+  const [rows, setRows]           = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [search, setSearch]       = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [kycFilter, setKycFilter]       = useState('ALL');
+  const [editRow, setEditRow]     = useState(null); // row being edited, or null
 
   const fetchData = useCallback(async () => {
     try {
@@ -225,15 +244,18 @@ const AdminStatueNumbers = () => {
   // Build the combined display list: numbered rows + gap sentinels, sorted by number
   const displayList = useMemo(() => {
     const q = search.toLowerCase();
-    const filterRow = (r) =>
-      !q ||
-      r.full_name?.toLowerCase().includes(q) ||
-      r.email?.toLowerCase().includes(q) ||
-      String(r.statue_number)?.includes(q);
+    const filterRow = (r) => {
+      if (q && !r.full_name?.toLowerCase().includes(q) && !r.email?.toLowerCase().includes(q) && !String(r.statue_number)?.includes(q)) return false;
+      if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
+      if (kycFilter !== 'ALL' && r.kyc_status !== kycFilter) return false;
+      return true;
+    };
 
     const numbered = numberedRows.filter(filterRow).map((r) => ({ ...r, _type: 'row' }));
-    const gaps = search
-      ? [] // don't show gap sentinels when searching (would clutter results)
+    // Hide gaps when any filter is active (they don't have status/kyc data)
+    const isFiltered = !!q || statusFilter !== 'ALL' || kycFilter !== 'ALL';
+    const gaps = isFiltered
+      ? []
       : gapNumbers.map((n) => ({ _type: 'gap', gapNumber: n }));
 
     // Merge and sort
@@ -243,20 +265,45 @@ const AdminStatueNumbers = () => {
       return na - nb;
     });
     return combined;
-  }, [numberedRows, gapNumbers, search]);
+  }, [numberedRows, gapNumbers, search, statusFilter, kycFilter]);
 
   const filteredUnnumbered = useMemo(() => {
     const q = search.toLowerCase();
-    if (!q) return unnumberedRows;
-    return unnumberedRows.filter(
-      (r) => r.full_name?.toLowerCase().includes(q) || r.email?.toLowerCase().includes(q)
-    );
-  }, [unnumberedRows, search]);
+    return unnumberedRows.filter((r) => {
+      if (q && !r.full_name?.toLowerCase().includes(q) && !r.email?.toLowerCase().includes(q)) return false;
+      if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
+      if (kycFilter !== 'ALL' && r.kyc_status !== kycFilter) return false;
+      return true;
+    });
+  }, [unnumberedRows, search, statusFilter, kycFilter]);
 
   const handleSaved = useCallback(() => {
     setEditRow(null);
     fetchData();
   }, [fetchData]);
+
+  const handleExport = useCallback(() => {
+    if (!rows.length) return;
+    const COLUMNS = [
+      { header: 'Statue Number', key: 'statue_number' },
+      { header: 'Name',          key: 'full_name' },
+      { header: 'Phone Number',  key: 'phone_number' },
+      { header: 'Email',         key: 'email' },
+      { header: 'Status',        key: 'status' },
+      { header: 'KYC Status',    key: 'kyc_status' },
+      { header: 'Date',          key: (r) => r.created_at ? new Date(r.created_at).toLocaleDateString() : '' },
+    ];
+    // Sort by statue_number ascending, NULLs last — mirrors backend order
+    const sorted = [...rows].sort((a, b) => {
+      if (a.statue_number === null && b.statue_number === null) return 0;
+      if (a.statue_number === null) return 1;
+      if (b.statue_number === null) return -1;
+      return a.statue_number - b.statue_number;
+    });
+    const csv = toCsv(sorted, COLUMNS);
+    const date = new Date().toISOString().slice(0, 10);
+    downloadFile(csv, `statue-holders-${date}.csv`);
+  }, [rows]);
 
   const stats = {
     total:      numberedRows.length,
@@ -271,12 +318,45 @@ const AdminStatueNumbers = () => {
         title="Statue Numbers"
         subtitle="1.5 Ft statue seat assignments — view, correct, and manage number gaps"
         actions={
-          <AdminSearchInput
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search devotee…"
-            className="w-56"
-          />
+          <>
+            <AdminSearchInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search devotee…"
+              className="w-56"
+            />
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={loading || rows.length === 0}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#FBDB8C]/10 border border-[#FBDB8C]/20
+                         text-[#FBDB8C] text-[10px] font-black uppercase tracking-widest
+                         hover:bg-[#FBDB8C]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export CSV
+            </button>
+          </>
+        }
+        toolbar={
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-black text-white/30 uppercase tracking-widest shrink-0">Status</span>
+              <AdminFilterChips
+                options={['ALL', 'CONFIRMED', 'PENDING', 'REJECTED']}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-black text-white/30 uppercase tracking-widest shrink-0">KYC</span>
+              <AdminFilterChips
+                options={['ALL', 'APPROVED', 'SUBMITTED', 'PENDING', 'REJECTED']}
+                value={kycFilter}
+                onChange={setKycFilter}
+              />
+            </div>
+          </div>
         }
       />
 
@@ -308,8 +388,8 @@ const AdminStatueNumbers = () => {
       {/* ── Numbered / gap rows ── */}
       <AdminCard className="mb-6">
         {/* Table header */}
-        <div className="grid grid-cols-[80px_1fr_130px_120px_80px] gap-0 bg-black/20 border-b border-white/5">
-          {['#', 'Devotee', 'Status', 'Date', ''].map((h) => (
+        <div className="grid grid-cols-[80px_1fr_130px_120px_120px_80px] gap-0 bg-black/20 border-b border-white/5">
+          {['#', 'Devotee', 'Status', 'Date', 'KYC', ''].map((h) => (
             <div key={h} className={commonStyles.tableHeaderCell}>{h}</div>
           ))}
         </div>
@@ -327,12 +407,12 @@ const AdminStatueNumbers = () => {
               return (
                 <div
                   key={`gap-${item.gapNumber}`}
-                  className="grid grid-cols-[80px_1fr_130px_120px_80px] gap-0 border-b border-white/5 bg-amber-500/5 hover:bg-amber-500/8 transition-all"
+                  className="grid grid-cols-[80px_1fr_130px_120px_120px_80px] gap-0 border-b border-white/5 bg-amber-500/5 hover:bg-amber-500/8 transition-all"
                 >
                   <div className={`${commonStyles.tableCell} font-black text-amber-400/60`}>
                     #{item.gapNumber}
                   </div>
-                  <div className={`${commonStyles.tableCell} col-span-3`}>
+                  <div className={`${commonStyles.tableCell} col-span-4`}>
                     <span className="text-[11px] text-amber-400/60 font-bold uppercase tracking-widest">
                       — gap / unassigned —
                     </span>
@@ -356,7 +436,7 @@ const AdminStatueNumbers = () => {
             return (
               <div
                 key={row.donation_id}
-                className={`grid grid-cols-[80px_1fr_130px_120px_80px] gap-0 border-b border-white/5 ${commonStyles.tableRow}`}
+                className={`grid grid-cols-[80px_1fr_130px_120px_120px_80px] gap-0 border-b border-white/5 ${commonStyles.tableRow}`}
               >
                 <div className={`${commonStyles.tableCell} font-black text-[#FBDB8C] tabular-nums`}>
                   #{row.statue_number}
@@ -372,6 +452,9 @@ const AdminStatueNumbers = () => {
                   {new Date(row.created_at).toLocaleDateString('en-IN', {
                     day: '2-digit', month: 'short', year: 'numeric',
                   })}
+                </div>
+                <div className={commonStyles.tableCell}>
+                  <KycBadge status={row.kyc_status} />
                 </div>
                 <div className={commonStyles.tableCell}>
                   <button
@@ -406,8 +489,8 @@ const AdminStatueNumbers = () => {
           </div>
 
           {/* Table header */}
-          <div className="grid grid-cols-[1fr_130px_120px_120px] gap-0 bg-black/20 border-b border-white/5">
-            {['Devotee', 'Status', 'Date', ''].map((h) => (
+          <div className="grid grid-cols-[1fr_130px_120px_120px_120px] gap-0 bg-black/20 border-b border-white/5">
+            {['Devotee', 'Status', 'Date', 'KYC', ''].map((h) => (
               <div key={h} className={commonStyles.tableHeaderCell}>{h}</div>
             ))}
           </div>
@@ -420,7 +503,7 @@ const AdminStatueNumbers = () => {
             filteredUnnumbered.map((row) => (
               <div
                 key={row.donation_id}
-                className={`grid grid-cols-[1fr_130px_120px_120px] gap-0 border-b border-white/5 ${commonStyles.tableRow}`}
+                className={`grid grid-cols-[1fr_130px_120px_120px_120px] gap-0 border-b border-white/5 ${commonStyles.tableRow}`}
               >
                 <div className={commonStyles.tableCell}>
                   <p className="text-sm text-white font-bold truncate">{row.full_name}</p>
@@ -433,6 +516,9 @@ const AdminStatueNumbers = () => {
                   {new Date(row.created_at).toLocaleDateString('en-IN', {
                     day: '2-digit', month: 'short', year: 'numeric',
                   })}
+                </div>
+                <div className={commonStyles.tableCell}>
+                  <KycBadge status={row.kyc_status} />
                 </div>
                 <div className={commonStyles.tableCell}>
                   <button

@@ -58,3 +58,37 @@ export const formatInr = (amount) => inrFormatter.format(Number(amount) || 0);
 
 /** Format the per-coin INR rate. */
 export const formatInrRate = (amount) => inrRateFormatter.format(Number(amount) || 0);
+
+/*
+ * 1.5 Ft statue seva coin rule — mirrors backend/src/modules/donations/coinRules.js.
+ * 500 coins for seva dated up to 7 Sep 2026, 100 from 8 Sep 2026, judged by the
+ * seva's calendar date in India (IST). The backend is authoritative; this is only
+ * used to pre-fill / preview values in the console.
+ */
+export const STATUE_COIN_CUTOFF_IST = '2026-09-08';
+const IST_OFFSET_MS = 330 * 60 * 1000;
+
+/** YYYY-MM-DD of an instant (or date string) as seen in India. */
+export const istDateString = (value) => {
+  const t = new Date(value).getTime();
+  if (Number.isNaN(t)) return null;
+  return new Date(t + IST_OFFSET_MS).toISOString().slice(0, 10);
+};
+
+/** Today's date in India, YYYY-MM-DD (for date-picker max bounds). */
+export const istToday = () => istDateString(Date.now());
+
+/** Automatic statue coin reward for a seva date. */
+export const statueCoinRate = (sevaDate) =>
+  istDateString(sevaDate ?? Date.now()) < STATUE_COIN_CUTOFF_IST ? 500 : 100;
+
+/** Format a date as "05 Sep 2026" in IST. */
+export const formatIstDate = (value) =>
+  value
+    ? new Date(value).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      })
+    : '—';

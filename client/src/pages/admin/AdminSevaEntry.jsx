@@ -16,6 +16,7 @@ import {
 import api from '../../api/axios';
 import { API_ROUTES } from '../../config/api';
 import { commonStyles } from '../../styles/index.styles';
+import { statueCoinRate, istToday } from '../../config/coins';
 
 /*
   Admin — Record Seva Entry (on behalf of a devotee)
@@ -114,11 +115,9 @@ const AdminSevaEntry = () => {
   // Sync the coin pre-fill whenever the category or seva date changes — but only until
   // the admin manually edits the field (coinsEdited). Once they type, stop overwriting.
   // effectiveCoinReward is derived below; this effect captures it on each render.
-  const STATUE_COIN_CUTOFF = '2026-09-08';
-  const effectiveCoinReward =
-    (purchaseDate ? new Date(purchaseDate) : new Date()) < new Date(STATUE_COIN_CUTOFF)
-      ? 500
-      : 100;
+  // Same IST-based rule as the backend (coinRules.js). A date-only "YYYY-MM-DD" is
+  // read as that calendar day; no date → today.
+  const effectiveCoinReward = statueCoinRate(purchaseDate || Date.now());
 
   useEffect(() => {
     if (selectedCategory?.slug === 'statue_1_5_ft' && !coinsEdited) {
@@ -154,7 +153,8 @@ const AdminSevaEntry = () => {
   };
 
   // Today as YYYY-MM-DD (used as the max= bound on the date picker).
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Must be the IST date — toISOString() is UTC and lags a day before 05:30 IST.
+  const todayStr = istToday();
 
   const canSubmit =
     selectedUser && categoryId && parseFloat(amount) > 0 && !submitting;
@@ -342,7 +342,7 @@ const AdminSevaEntry = () => {
               <p className="text-[10px] text-[#FBDB8C]/50 mt-1.5 tracking-wide">
                 Pre-filled with the standard rate ({effectiveCoinReward} coins
                 {effectiveCoinReward === 500 && ' — promo rate, seva dated on/before 7 Sep 2026'}).
-                Edit to override or set&nbsp;0 to skip. Awarded only on the devotee&apos;s{' '}
+                Edit to override, or set&nbsp;0 for no coins (still counts as their one-time statue reward). Awarded only on the devotee&apos;s{' '}
                 <strong>first</strong> statue, locked 5&nbsp;yrs from seva date.
               </p>
             </div>
