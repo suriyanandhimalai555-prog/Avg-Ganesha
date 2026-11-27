@@ -1,6 +1,7 @@
 import { query } from '../../shared/db.js';
 import { uploadToS3 } from '../../shared/s3.js';
 import { invalidateCache } from '../../shared/redis.js';
+import { logAudit, devoteeLabel } from '../../shared/audit.js';
 
 // --- 1. SUBMIT KYC ---
 export const submitKYC = async (req, res) => {
@@ -73,11 +74,27 @@ export const reviewKYC = async (req, res) => {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
+    const before = await query('SELECT id, full_name, email, kyc_status FROM users WHERE id = $1', [userId]);
     await query(
       'UPDATE users SET kyc_status = $1, kyc_rejection_reason = $2, kyc_reviewed_by = $3, updated_at = NOW() WHERE id = $4',
       [status, status === 'REJECTED' ? rejectionReason || null : null, req.user.id, userId]
     );
     await invalidateCache('admin:stats');
+
+    const u = before.rows[0];
+    if (u) {
+      await logAudit(null, {
+        req,
+        action: 'KYC_REVIEW',
+        entityType: 'USER',
+        entityId: u.id,
+        targetUserId: u.id,
+        summary:
+          `KYC ${status.toLowerCase()} for ${devoteeLabel(u, userId)}` +
+          (status === 'REJECTED' && rejectionReason ? ` — reason: ${rejectionReason}` : ''),
+        details: { from: u.kyc_status, to: status, rejectionReason: status === 'REJECTED' ? rejectionReason || null : null },
+      });
+    }
 
     res.json({ message: `User KYC has been ${status}` });
   } catch (err) {

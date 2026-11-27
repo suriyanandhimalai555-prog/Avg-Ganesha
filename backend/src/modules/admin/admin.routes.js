@@ -16,6 +16,9 @@ import {
   adminSubmitKYC,
   resetUserPassword,
   exportUsers,
+  getUserOverview,
+  adjustUserCoins,
+  getAuditLog,
 } from './admin.controller.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,5 +73,11 @@ router.put('/users/:userId', updateUserDetails);
 // Password reset is ADMIN-only — it can take over any account, so STAFF never gets it.
 router.post('/users/:userId/password', authorizeRole('ADMIN'), resetUserPassword);
 router.post('/signed-url', getSignedImageUrl);
+// Devotee 360° view — every seva, coin row and recent audit entry for one devotee.
+router.get('/users/:userId/overview', getUserOverview);
+// Manual AVG-coin adjustment (add or deduct) — ADMIN-only god-power.
+router.post('/users/:userId/coins', authorizeRole('ADMIN'), adjustUserCoins);
+// Console-wide audit log — ADMIN-only.
+router.get('/audit-log', authorizeRole('ADMIN'), getAuditLog);
 
 export default router;

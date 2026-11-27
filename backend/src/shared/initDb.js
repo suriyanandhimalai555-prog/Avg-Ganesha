@@ -4,7 +4,40 @@
  */
 import { query } from './db.js';
 
+// Run one DDL step in isolation so a failure can't skip the steps after it.
+const step = async (label, sql) => {
+  try {
+    await query(sql);
+  } catch (err) {
+    console.error(`❌ Schema step failed (${label}):`, err.message);
+  }
+};
+
 export const initDb = async () => {
+  // Console-wide audit trail — created FIRST and in isolation: console writes log to
+  // it (see shared/audit.js), so it must not depend on any later step succeeding.
+  // actor_name/actor_email are snapshots so the log survives operator deletion.
+  await step('admin_audit_log', `
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+      id             SERIAL       PRIMARY KEY,
+      actor_id       INTEGER      REFERENCES users(id) ON DELETE SET NULL,
+      actor_name     TEXT,
+      actor_email    TEXT,
+      actor_role     VARCHAR(16),
+      action         VARCHAR(48)  NOT NULL,
+      entity_type    VARCHAR(24)  NOT NULL,
+      entity_id      INTEGER,
+      target_user_id INTEGER      REFERENCES users(id) ON DELETE SET NULL,
+      summary        TEXT         NOT NULL,
+      details        JSONB,
+      created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    );
+  `);
+  await step('idx_admin_audit_created', `CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created ON admin_audit_log(created_at DESC);`);
+  await step('idx_admin_audit_target', `CREATE INDEX IF NOT EXISTS idx_admin_audit_log_target ON admin_audit_log(target_user_id);`);
+  await step('idx_admin_audit_actor', `CREATE INDEX IF NOT EXISTS idx_admin_audit_log_actor ON admin_audit_log(actor_id);`);
+  await step('idx_admin_audit_action', `CREATE INDEX IF NOT EXISTS idx_admin_audit_log_action ON admin_audit_log(action);`);
+
   try {
     await query(`
       CREATE TABLE IF NOT EXISTS user_avg_coins (
@@ -48,15 +81,22 @@ export const initDb = async () => {
       );
     `);
     await query(`CREATE INDEX IF NOT EXISTS idx_donation_audit_log_donation ON donation_audit_log(donation_id);`);
-
-    // NOTE: the one-time AVG-coin backfill that used to run here on EVERY boot has been
-    // removed. It (a) always inserted 100 coins, even for seva dated in the 500-coin
-    // promotional window, and (b) re-awarded coins to devotees for whom an admin had
-    // deliberately chosen 0 coins, on the next restart. The backfill already ran on
-    // production long ago; new coin rows are written only by confirmStatueSeva().
-
-    console.log('✅ Schema bootstrap: user_avg_coins ready');
   } catch (err) {
     console.error('❌ Schema bootstrap failed:', err.message);
   }
+
+  // Manual AVG-coin adjustments (ADMIN only) have no donation: donation_id becomes
+  // nullable (UNIQUE still allows many NULLs), and we record who granted it and why.
+  await step('user_avg_coins.donation_id nullable', `ALTER TABLE user_avg_coins ALTER COLUMN donation_id DROP NOT NULL;`);
+  await step('user_avg_coins.granted_by', `ALTER TABLE user_avg_coins ADD COLUMN IF NOT EXISTS granted_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await step('user_avg_coins.note', `ALTER TABLE user_avg_coins ADD COLUMN IF NOT EXISTS note TEXT;`);
+
+  // NOTE: the one-time AVG-coin backfill that used to run here on EVERY boot has been
+  // removed. It (a) always inserted 100 coins, even for seva dated in the 500-coin
+  // promotional window, and (b) re-awarded coins to devotees for whom an admin had
+  // deliberately chosen 0 coins, on the next restart. The backfill already ran on
+  // production long ago; new statue coin rows are written only by confirmStatueSeva(),
+  // and manual adjustments only by adjustUserCoins() (ADMIN).
+
+  console.log('✅ Schema bootstrap complete');
 };

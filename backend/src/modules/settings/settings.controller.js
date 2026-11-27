@@ -1,5 +1,6 @@
 import { query } from '../../shared/db.js';
 import { getCachedData, invalidateCache } from '../../shared/redis.js';
+import { logAudit } from '../../shared/audit.js';
 
 const CACHE_KEYS = {
   BANK_SETTINGS: 'settings:bank'
@@ -40,6 +41,12 @@ export const updateBankDetails = async (req, res) => {
   }
 
   try {
+    const beforeRes = await query(
+      'SELECT key, value FROM system_settings WHERE key = ANY($1::text[])',
+      [Object.keys(updates)]
+    );
+    const before = Object.fromEntries(beforeRes.rows.map((r) => [r.key, r.value]));
+
     // Loop through each key and update it
     const promises = Object.keys(updates).map(key => {
         return query(
@@ -52,6 +59,17 @@ export const updateBankDetails = async (req, res) => {
 
     // Invalidate settings cache
     await invalidateCache(CACHE_KEYS.BANK_SETTINGS);
+
+    const changed = Object.keys(updates).filter((k) => (before[k] ?? '') !== updates[k]);
+    if (changed.length > 0) {
+      await logAudit(null, {
+        req,
+        action: 'SETTINGS_UPDATE',
+        entityType: 'SETTINGS',
+        summary: `Updated donation bank details (${changed.join(', ')})`,
+        details: Object.fromEntries(changed.map((k) => [k, { from: before[k] ?? null, to: updates[k] }])),
+      });
+    }
 
     res.json({ message: 'Bank details updated successfully' });
   } catch (err) {

@@ -15,6 +15,7 @@ import {
   Hash,
   Upload,
   Coins,
+  History,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { logout } from '../../redux/slices/authSlice';
@@ -118,6 +119,14 @@ const NAV_GROUPS = [
         Icon: Settings,
         adminOnly: true, // bank/settings edits are a god-power — hide from STAFF
         match: ({ pathname }) => pathname.startsWith('/admin/settings'),
+      },
+      {
+        key: 'audit-log',
+        to: '/admin/audit-log',
+        label: 'Audit Log',
+        Icon: History,
+        adminOnly: true, // who-changed-what is visible to ADMIN only (STAFF actions are still logged)
+        match: ({ pathname }) => pathname.startsWith('/admin/audit-log'),
       },
     ],
   },

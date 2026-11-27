@@ -16,6 +16,8 @@ import AdminKycEntry from './pages/admin/AdminKycEntry';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminStatueNumbers from './pages/admin/AdminStatueNumbers';
 import AdminCoinHoldings from './pages/admin/AdminCoinHoldings';
+import AdminDevoteeDetail from './pages/admin/AdminDevoteeDetail';
+import AdminAuditLog from './pages/admin/AdminAuditLog';
 import DashboardLayout from './components/DashboardLayout';
 import PlansPage from './pages/PlansPage';
 import NetworkPage from './pages/NetworkPage';
@@ -70,6 +72,7 @@ function AppContent() {
       >
         <Route index element={<AdminDashboard />} />
         <Route path="devotees" element={<AdminDevotees key="directory" mode="directory" />} />
+        <Route path="devotees/:userId" element={<AdminDevoteeDetail />} />
         <Route path="kyc" element={<AdminDevotees key="kyc" mode="kyc" />} />
         <Route path="invite-tree" element={<AdminInviteTree />} />
         <Route path="seva" element={<AdminSeva />} />
@@ -78,6 +81,7 @@ function AppContent() {
         <Route path="statue-numbers" element={<AdminStatueNumbers />} />
         <Route path="coin-holdings" element={<AdminCoinHoldings />} />
         <Route path="settings" element={<AdminSettings />} />
+        <Route path="audit-log" element={<AdminAuditLog />} />
       </Route>
 
       {/* Global Layout Wrapper for devotee portal */}

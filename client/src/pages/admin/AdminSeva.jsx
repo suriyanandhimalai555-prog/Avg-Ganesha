@@ -11,6 +11,7 @@ import {
   X,
   ExternalLink,
   Download,
+  Trash2,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { API_ROUTES } from '../../config/api';
@@ -18,6 +19,7 @@ import { commonStyles, adminStyles } from '../../styles/index.styles';
 import { S3Image, S3Anchor } from '../../utils/s3Utils.jsx';
 import ActionConfirmModal from './ActionConfirmModal';
 import SevaDateChangeModal from './SevaDateChangeModal';
+import SevaRemoveModal from './SevaRemoveModal';
 import { statueCoinRate, formatIstDate } from '../../config/coins';
 import LoadingScreen from '../../components/LoadingScreen';
 import { toCsv, downloadFile } from '../../utils/csv';
@@ -58,6 +60,7 @@ const AdminSeva = () => {
   const currentUser = useSelector((state) => state.auth.user);
   const isAdmin = currentUser?.role === 'ADMIN'; // date changes re-price coins → ADMIN only
   const [dateChangeDonation, setDateChangeDonation] = useState(null);
+  const [removeDonationId, setRemoveDonationId] = useState(null);
   const [notice, setNotice] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStatus = (searchParams.get('status') || 'ALL').toUpperCase();
@@ -340,6 +343,7 @@ const AdminSeva = () => {
                       )}
                     </td>
                     <td className={commonStyles.tableCell}>
+                      <div className="flex items-center gap-2">
                       {d.status === 'PENDING' ? (
                         <div className="flex gap-2">
                           <button
@@ -364,6 +368,18 @@ const AdminSeva = () => {
                           Resolved
                         </span>
                       )}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => setRemoveDonationId(d.id)}
+                          aria-label="Remove seva"
+                          title="Remove seva"
+                          className="p-2 rounded-xl border border-white/10 text-white/30 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition-all"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -480,6 +496,19 @@ const AdminSeva = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {removeDonationId && (
+        <SevaRemoveModal
+          donationId={removeDonationId}
+          onClose={() => setRemoveDonationId(null)}
+          onRemoved={async (message) => {
+            setRemoveDonationId(null);
+            setNotice(message);
+            await fetchDonations();
+            window.dispatchEvent(new CustomEvent('admin:refresh-stats'));
+          }}
+        />
       )}
 
       {dateChangeDonation && (

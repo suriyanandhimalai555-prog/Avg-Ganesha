@@ -4,6 +4,7 @@
 import { query, withTransaction } from '../../shared/db.js';
 import { uploadToS3, getS3SignedUrl } from '../../shared/s3.js';
 import { getCachedData, invalidateCache } from '../../shared/redis.js';
+import { logAudit, devoteeLabel } from '../../shared/audit.js';
 import {
   STATUE_SLUG,
   STATUE_COIN_SOURCE,
@@ -13,6 +14,7 @@ import {
   istTimeString,
   istToday,
   isValidIsoDate,
+  summarizeCoins,
 } from './coinRules.js';
 
 const CACHE_KEYS = {
@@ -78,6 +80,24 @@ function parseCoinOverride(raw) {
   if (raw === '' || raw === null) return 0;
   const n = Number(raw);
   return Number.isInteger(n) && n >= 0 ? n : NaN;
+}
+
+// Context for an audit row about a donation: devotee, category, seat and coins awarded.
+// Called inside the same transaction so it sees the just-written seat/coin rows.
+async function donationAuditContext(client, donationId) {
+  const r = await client.query(
+    `SELECT d.id, d.user_id, d.amount, d.status, d.statue_number, d.created_at,
+            dc.name AS category_name, dc.slug,
+            u.full_name, u.email,
+            c.amount AS coins
+     FROM donations d
+     JOIN users u ON u.id = d.user_id
+     JOIN donation_categories dc ON dc.id = d.category_id
+     LEFT JOIN user_avg_coins c ON c.donation_id = d.id
+     WHERE d.id = $1::int`,
+    [donationId]
+  );
+  return r.rows[0] || null;
 }
 
 
@@ -414,6 +434,33 @@ export const reviewDonation = async (req, res) => {
           await confirmStatueSeva(client, donation, coinOverride);
         }
       }
+
+      const ctx = await donationAuditContext(client, updateResult.rows[0].id);
+      if (ctx) {
+        const coins = ctx.coins != null ? parseFloat(ctx.coins) : null;
+        await logAudit(client, {
+          req,
+          action: status === 'CONFIRMED' ? 'SEVA_CONFIRM' : 'SEVA_REJECT',
+          entityType: 'DONATION',
+          entityId: ctx.id,
+          targetUserId: ctx.user_id,
+          summary:
+            `${status === 'CONFIRMED' ? 'Confirmed' : 'Rejected'} ${ctx.category_name} seva #${ctx.id} ` +
+            `(₹${parseFloat(ctx.amount)}) for ${devoteeLabel({ ...ctx, id: ctx.user_id })}` +
+            (status === 'CONFIRMED' && coins != null ? ` — ${coins} AVG coins` : '') +
+            (status === 'REJECTED' && rejectionReason ? ` — reason: ${rejectionReason}` : ''),
+          details: {
+            from: 'PENDING',
+            to: status,
+            category: ctx.category_name,
+            amount: parseFloat(ctx.amount),
+            statueNumber: ctx.statue_number,
+            coinsAwarded: coins,
+            coinOverride: coinOverride ?? null,
+            rejectionReason: status === 'REJECTED' ? rejectionReason || null : null,
+          },
+        });
+      }
       return true;
     });
 
@@ -505,6 +552,33 @@ export const createAdminEntry = async (req, res) => {
       if (status === 'CONFIRMED' && isStatue) {
         await confirmStatueSeva(client, row, coinOverride);
       }
+
+      const ctx = await donationAuditContext(client, row.id);
+      if (ctx) {
+        const coins = ctx.coins != null ? parseFloat(ctx.coins) : null;
+        await logAudit(client, {
+          req,
+          action: 'SEVA_RECORD',
+          entityType: 'DONATION',
+          entityId: row.id,
+          targetUserId: ctx.user_id,
+          summary:
+            `Recorded ${ctx.category_name} seva #${row.id} (₹${amount}, ${status}) on behalf of ` +
+            `${devoteeLabel({ ...ctx, id: ctx.user_id })}` +
+            (rawDate ? ` dated ${rawDate}` : '') +
+            (coins != null ? ` — ${coins} AVG coins` : ''),
+          details: {
+            category: ctx.category_name,
+            amount,
+            status,
+            purchaseDate: rawDate || null,
+            statueNumber: ctx.statue_number,
+            coinsAwarded: coins,
+            coinOverride: coinOverride ?? null,
+            hasProof: !!paymentProofPath,
+          },
+        });
+      }
       return row;
     });
 
@@ -578,7 +652,7 @@ export const updateStatueNumber = async (req, res) => {
     await withTransaction(async (client) => {
       // Lock + fetch the source donation
       const srcRes = await client.query(
-        `SELECT d.id, d.statue_number, dc.slug
+        `SELECT d.id, d.user_id, d.statue_number, dc.slug
          FROM donations d
          JOIN donation_categories dc ON dc.id = d.category_id
          WHERE d.id = $1
@@ -602,7 +676,7 @@ export const updateStatueNumber = async (req, res) => {
 
       // Lock + fetch whoever currently holds the target number (if anyone)
       const occupantRes = await client.query(
-        `SELECT id, statue_number FROM donations WHERE statue_number = $1 FOR UPDATE`,
+        `SELECT id, user_id, statue_number FROM donations WHERE statue_number = $1 FOR UPDATE`,
         [num]
       );
       const occupant = occupantRes.rows[0];
@@ -628,6 +702,39 @@ export const updateStatueNumber = async (req, res) => {
         await client.query(`UPDATE donations SET statue_number = NULL WHERE id = $1`, [occupant.id]);
         await client.query(`UPDATE donations SET statue_number = $1 WHERE id = $2`, [num, donationId]);
         await client.query(`UPDATE donations SET statue_number = $1 WHERE id = $2`, [oldSrcNumber, occupant.id]);
+      }
+
+      // Audit: one row per affected devotee, so a swap shows in both histories.
+      const names = await client.query(
+        'SELECT id, full_name, email FROM users WHERE id = ANY($1::int[])',
+        [[src.user_id, occupant?.user_id].filter((v) => v != null)]
+      );
+      const byId = Object.fromEntries(names.rows.map((u) => [u.id, u]));
+      const srcLabel = devoteeLabel(byId[src.user_id], src.user_id);
+      const fmt = (n) => (n == null ? 'none' : `#${n}`);
+      await logAudit(client, {
+        req,
+        action: 'STATUE_NUMBER_CHANGE',
+        entityType: 'DONATION',
+        entityId: src.id,
+        targetUserId: src.user_id,
+        summary:
+          `Statue number for ${srcLabel} changed ${fmt(src.statue_number)} → #${num}` +
+          (occupant ? ` (swapped with ${devoteeLabel(byId[occupant.user_id], occupant.user_id)})` : ''),
+        details: { donationId: src.id, from: src.statue_number, to: num, swappedWithDonation: occupant?.id ?? null },
+      });
+      if (occupant) {
+        await logAudit(client, {
+          req,
+          action: 'STATUE_NUMBER_CHANGE',
+          entityType: 'DONATION',
+          entityId: occupant.id,
+          targetUserId: occupant.user_id,
+          summary:
+            `Statue number for ${devoteeLabel(byId[occupant.user_id], occupant.user_id)} changed ` +
+            `#${num} → ${fmt(src.statue_number)} (swapped with ${srcLabel})`,
+          details: { donationId: occupant.id, from: num, to: src.statue_number, swappedWithDonation: src.id },
+        });
       }
     });
 
@@ -662,20 +769,8 @@ export const getMyCoins = async (req, res) => {
       isWithdrawable: r.is_withdrawable,
     }));
 
-    const totalBalance = entries.reduce((sum, e) => sum + e.amount, 0);
-    const lockedBalance = entries
-      .filter((e) => !e.isWithdrawable && new Date(e.lockedUntil) > new Date())
-      .reduce((sum, e) => sum + e.amount, 0);
-    const nextUnlockAt = entries
-      .filter((e) => !e.isWithdrawable && new Date(e.lockedUntil) > new Date())
-      .map((e) => new Date(e.lockedUntil))
-      .sort((a, b) => a - b)[0] || null;
-
     res.json({
-      totalBalance,
-      lockedBalance,
-      withdrawableBalance: totalBalance - lockedBalance,
-      nextUnlockAt,
+      ...summarizeCoins(entries),
       entries,
     });
   } catch (err) {
@@ -880,6 +975,32 @@ export const changeSevaDate = async (req, res) => {
             : `Seva date ${p.oldDate} → ${p.newDate}`,
         ]
       );
+
+      // Console-wide audit log. Same transaction ⇒ same NOW() as the donation_audit_log
+      // row above, which the audit feed uses to de-duplicate the legacy table.
+      const ownerRes = await client.query(
+        `SELECT d.user_id, u.full_name, u.email FROM donations d JOIN users u ON u.id = d.user_id WHERE d.id = $1`,
+        [p.donationId]
+      );
+      const owner = ownerRes.rows[0];
+      await logAudit(client, {
+        req,
+        action: 'SEVA_DATE_CHANGE',
+        entityType: 'DONATION',
+        entityId: p.donationId,
+        targetUserId: owner?.user_id ?? null,
+        summary:
+          `Changed ${p.categoryName} seva #${p.donationId} date ${p.oldDate} → ${p.newDate} for ` +
+          `${devoteeLabel({ ...owner, id: owner?.user_id }, owner?.user_id)}` +
+          (p.coin?.hasRow ? `; coins ${p.coin.currentAmount} → ${p.coin.newAmount}` : ''),
+        details: {
+          from: p.oldDate,
+          to: p.newDate,
+          coinsFrom: p.coin?.hasRow ? p.coin.currentAmount : null,
+          coinsTo: p.coin?.hasRow ? p.coin.newAmount : null,
+          recalculated: p.coin?.hasRow ? p.coin.recalculate : null,
+        },
+      });
       return p;
     });
 
@@ -908,5 +1029,201 @@ export const changeSevaDate = async (req, res) => {
     if (err.status) return res.status(err.status).json({ error: err.message });
     console.error('Change seva date error:', err);
     res.status(500).json({ error: 'Failed to change seva date' });
+  }
+};
+
+// ============================================================================
+// Admin: remove a seva (ADMIN only) — permanent delete, with preview
+// ============================================================================
+//
+// Deleting a donation cascades its AVG-coin row and its donation_audit_log rows
+// (both FK ON DELETE CASCADE). Before the delete, a full snapshot of the seva is
+// written to admin_audit_log (no FK to donations), so the record of what was removed
+// — and by whom, and why — survives.
+//
+// Effects shown in the preview (planSevaRemoval is shared by preview and apply):
+//   • coins on this seva are taken back; refused if that would push the devotee's
+//     balance below 0 (e.g. a manual deduction already consumed them);
+//   • a statue seat number held by this seva is freed (the sequence is not touched);
+//   • if the devotee has other CONFIRMED 1.5 Ft statue sevas, they keep no seat / no
+//     coins automatically — the preview warns so the admin can fix it via Statue Numbers
+//     or Adjust coins.
+async function planSevaRemoval(db, donationId, lock = false) {
+  const loadDonation = () => db.query(
+    `SELECT d.id, d.user_id, d.category_id, d.amount, d.status, d.statue_number, d.created_at,
+            d.payment_proof_path, d.rejection_reason, d.recorded_by, d.reviewed_by,
+            dc.name AS category_name, dc.slug AS category_slug,
+            u.full_name, u.email
+     FROM donations d
+     JOIN donation_categories dc ON dc.id = d.category_id
+     JOIN users u ON u.id = d.user_id
+     WHERE d.id = $1::int
+     ${lock ? 'FOR UPDATE OF d' : ''}`,
+    [donationId]
+  );
+  const notFound = () => {
+    const err = new Error('Seva not found');
+    err.status = 404;
+    return err;
+  };
+
+  let d = (await loadDonation()).rows[0];
+  if (!d) throw notFound();
+
+  if (lock) {
+    // Same per-devotee mutex as confirmStatueSeva / adjustUserCoins, then re-read the
+    // (now row-locked) seva so status/seat/coins reflect any change that just committed.
+    await db.query('SELECT id FROM users WHERE id = $1::int FOR UPDATE', [d.user_id]);
+    d = (await loadDonation()).rows[0];
+    if (!d) throw notFound();
+  }
+
+  const [coinRes, balRes, otherStatueRes] = await Promise.all([
+    db.query('SELECT id, amount FROM user_avg_coins WHERE donation_id = $1::int', [d.id]),
+    db.query('SELECT COALESCE(SUM(amount), 0) AS total FROM user_avg_coins WHERE user_id = $1::int', [d.user_id]),
+    db.query(
+      `SELECT d2.id FROM donations d2
+       JOIN donation_categories dc2 ON dc2.id = d2.category_id
+       WHERE d2.user_id = $1::int AND d2.id <> $2::int
+         AND d2.status = 'CONFIRMED' AND dc2.slug = $3
+       ORDER BY d2.created_at ASC`,
+      [d.user_id, d.id, STATUE_SLUG]
+    ),
+  ]);
+
+  const coinsOnSeva = coinRes.rows[0] ? parseFloat(coinRes.rows[0].amount) : 0;
+  const balanceBefore = parseFloat(balRes.rows[0].total);
+  const balanceAfter = balanceBefore - coinsOnSeva;
+  const otherConfirmedStatueIds = otherStatueRes.rows.map((r) => r.id);
+
+  const warnings = [];
+  if (d.statue_number != null) {
+    warnings.push(`Statue seat #${d.statue_number} will be freed.`);
+  }
+  if (otherConfirmedStatueIds.length > 0 && (d.statue_number != null || coinRes.rows[0])) {
+    warnings.push(
+      `This devotee has other confirmed 1.5 Ft statue seva(s) (#${otherConfirmedStatueIds.join(', #')}). ` +
+      `They will NOT automatically receive a seat number or statue coins — use Statue Numbers / Adjust coins if needed.`
+    );
+  }
+
+  const blockedReason =
+    balanceAfter < 0
+      ? `Removing this seva would take back ${coinsOnSeva} coins, but the devotee only has ${balanceBefore}. ` +
+        `Reverse the manual deduction first.`
+      : null;
+
+  return {
+    donationId: d.id,
+    userId: d.user_id,
+    devoteeName: d.full_name,
+    devoteeEmail: d.email,
+    categoryName: d.category_name,
+    categorySlug: d.category_slug,
+    amount: parseFloat(d.amount),
+    status: d.status,
+    sevaDate: istDateString(d.created_at),
+    statueNumber: d.statue_number,
+    coinsOnSeva,
+    balanceBefore,
+    balanceAfter,
+    otherConfirmedStatueIds,
+    warnings,
+    blockedReason,
+    _row: d, // internal: full snapshot for the audit log (stripped from responses)
+  };
+}
+
+const publicPlan = ({ _row, ...rest }) => rest; // eslint-disable-line no-unused-vars
+
+// GET /api/donations/admin/:donationId/remove-preview
+export const previewSevaRemoval = async (req, res) => {
+  try {
+    if (!/^\d+$/.test(String(req.params.donationId))) {
+      return res.status(400).json({ error: 'Invalid seva id' });
+    }
+    const plan = await planSevaRemoval({ query }, parseInt(req.params.donationId, 10));
+    res.json(publicPlan(plan));
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('Preview seva removal error:', err);
+    res.status(500).json({ error: 'Failed to preview seva removal' });
+  }
+};
+
+// DELETE /api/donations/admin/:donationId   body: { reason }
+export const removeSeva = async (req, res) => {
+  const reason = String(req.body?.reason ?? '').trim();
+  try {
+    if (!/^\d+$/.test(String(req.params.donationId))) {
+      return res.status(400).json({ error: 'Invalid seva id' });
+    }
+    if (reason.length < 3) return res.status(400).json({ error: 'A reason is required' });
+    if (reason.length > 500) return res.status(400).json({ error: 'Reason must be at most 500 characters' });
+    const donationId = parseInt(req.params.donationId, 10);
+
+    const plan = await withTransaction(async (client) => {
+      const p = await planSevaRemoval(client, donationId, true);
+      if (p.blockedReason) {
+        const err = new Error(p.blockedReason);
+        err.status = 409;
+        throw err;
+      }
+
+      const r = p._row;
+      // Audit first (same transaction): the snapshot survives the delete.
+      await logAudit(client, {
+        req,
+        action: 'SEVA_DELETE',
+        entityType: 'DONATION',
+        entityId: p.donationId,
+        targetUserId: p.userId,
+        summary:
+          `Removed ${p.categoryName} seva #${p.donationId} (₹${p.amount}, ${p.status}, dated ${p.sevaDate}) of ` +
+          `${devoteeLabel({ full_name: p.devoteeName, email: p.devoteeEmail, id: p.userId })}` +
+          (p.coinsOnSeva ? ` — ${p.coinsOnSeva} coins taken back` : '') +
+          (p.statueNumber != null ? `, seat #${p.statueNumber} freed` : '') +
+          ` — reason: ${reason}`,
+        details: {
+          reason,
+          snapshot: {
+            id: r.id,
+            userId: r.user_id,
+            category: r.category_name,
+            categorySlug: r.category_slug,
+            amount: p.amount,
+            status: r.status,
+            createdAt: r.created_at,
+            statueNumber: r.statue_number,
+            paymentProofPath: r.payment_proof_path || null,
+            rejectionReason: r.rejection_reason,
+            recordedBy: r.recorded_by,
+            reviewedBy: r.reviewed_by,
+          },
+          coinsTakenBack: p.coinsOnSeva,
+          balanceBefore: p.balanceBefore,
+          balanceAfter: p.balanceAfter,
+          otherConfirmedStatueIds: p.otherConfirmedStatueIds,
+        },
+      });
+
+      // Cascades user_avg_coins + donation_audit_log rows for this seva.
+      await client.query('DELETE FROM donations WHERE id = $1::int', [p.donationId]);
+      return p;
+    });
+
+    await Promise.all([
+      invalidateCache(CACHE_KEYS.ADMIN_STATS),
+      invalidateCache(CACHE_KEYS.GLOBAL_STATUE_COUNT),
+    ]);
+
+    let message = `Removed seva #${plan.donationId} of ${plan.devoteeName}.`;
+    if (plan.coinsOnSeva) message += ` ${plan.coinsOnSeva} coins taken back.`;
+    if (plan.statueNumber != null) message += ` Seat #${plan.statueNumber} freed.`;
+    res.json({ ...publicPlan(plan), message });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error('Remove seva error:', err);
+    res.status(500).json({ error: 'Failed to remove seva' });
   }
 };

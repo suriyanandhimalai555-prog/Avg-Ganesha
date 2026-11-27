@@ -17,6 +17,8 @@ import {
   getMyCoins,
   previewSevaDateChange,
   changeSevaDate,
+  previewSevaRemoval,
+  removeSeva,
 } from './donations.controller.js';
 import { authenticateToken, authorizeRole } from '../../middleware/authMiddleware.js';
 
@@ -76,5 +78,8 @@ router.patch('/admin/statue-number/:donationId', authenticateToken, authorizeRol
 // Changing a seva's date re-prices AVG coins (claw-back / top-up) — ADMIN only.
 router.get('/admin/:donationId/date-change', authenticateToken, authorizeRole('ADMIN'), previewSevaDateChange);
 router.patch('/admin/:donationId/date', authenticateToken, authorizeRole('ADMIN'), changeSevaDate);
+// Removing a seva (permanent; takes back its coins, frees its seat) — ADMIN only.
+router.get('/admin/:donationId/remove-preview', authenticateToken, authorizeRole('ADMIN'), previewSevaRemoval);
+router.delete('/admin/:donationId', authenticateToken, authorizeRole('ADMIN'), removeSeva);
 
 export default router;

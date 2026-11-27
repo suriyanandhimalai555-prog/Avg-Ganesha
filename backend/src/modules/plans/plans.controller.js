@@ -1,5 +1,6 @@
 import { query } from '../../shared/db.js';
 import { getCachedData, invalidateCache } from '../../shared/redis.js';
+import { logAudit } from '../../shared/audit.js';
 
 const CACHE_KEYS = {
   PLANS: 'plans:all'
@@ -36,6 +37,7 @@ export const updatePlan = async (req, res) => {
       RETURNING *
     `;
     
+    const beforeRes = await query('SELECT * FROM membership_plans WHERE id = $1', [id]);
     const result = await query(updateQuery, [name, tagline, subtitle, description, price, benefitsJson, id]);
 
     if (result.rows.length === 0) {
@@ -44,6 +46,23 @@ export const updatePlan = async (req, res) => {
 
     // Invalidate plans cache
     await invalidateCache(CACHE_KEYS.PLANS);
+
+    const before = beforeRes.rows[0] || {};
+    const after = result.rows[0];
+    const fields = ['name', 'tagline', 'subtitle', 'description', 'price', 'benefits'];
+    const diff = Object.fromEntries(
+      fields
+        .filter((f) => JSON.stringify(before[f]) !== JSON.stringify(after[f]))
+        .map((f) => [f, { from: before[f] ?? null, to: after[f] ?? null }])
+    );
+    await logAudit(null, {
+      req,
+      action: 'PLANS_UPDATE',
+      entityType: 'PLANS',
+      entityId: after.id,
+      summary: `Updated membership plan "${after.name}"` + (Object.keys(diff).length ? ` (${Object.keys(diff).join(', ')})` : ''),
+      details: diff,
+    });
 
     res.json(result.rows[0]);
   } catch (err) {

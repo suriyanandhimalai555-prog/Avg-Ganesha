@@ -13,6 +13,9 @@ export const API_ROUTES = Object.freeze({
   INVITES: '/api/invites',
   KYC: '/api/kyc',
   ADMIN: '/api/admin',
+  ADMIN_USER_OVERVIEW: (id) => `/api/admin/users/${id}/overview`,
+  ADMIN_USER_COINS: (id) => `/api/admin/users/${id}/coins`,
+  ADMIN_AUDIT_LOG: '/api/admin/audit-log',
   PLANS: '/api/plans',
   SETTINGS: '/api/settings',
   DONATIONS: {
@@ -28,5 +31,7 @@ export const API_ROUTES = Object.freeze({
     ADMIN_UPDATE_STATUE_NUMBER: (id) => `/api/donations/admin/statue-number/${id}`,
     ADMIN_DATE_CHANGE_PREVIEW: (id) => `/api/donations/admin/${id}/date-change`,
     ADMIN_CHANGE_DATE: (id) => `/api/donations/admin/${id}/date`,
+    ADMIN_REMOVE_PREVIEW: (id) => `/api/donations/admin/${id}/remove-preview`,
+    ADMIN_REMOVE: (id) => `/api/donations/admin/${id}`,
   },
 });

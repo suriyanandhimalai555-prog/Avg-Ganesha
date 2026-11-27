@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Coins, Download, CheckCircle, XCircle, Clock } from 'lucide-react';
 import api from '../../api/axios';
 import { commonStyles } from '../../styles/index.styles';
@@ -60,6 +61,7 @@ const AdminCoinHoldings = () => {
   const [search, setSearch]       = useState('');
   const [kycFilter, setKycFilter] = useState('all');
   const [exporting, setExporting] = useState(false);
+  const navigate = useNavigate();
 
   // Reset to page 1 whenever search or filter changes
   useEffect(() => { setPage(1); }, [search, kycFilter]);
@@ -219,7 +221,9 @@ const AdminCoinHoldings = () => {
                   return (
                     <tr
                       key={row.id}
-                      className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
+                      onClick={() => navigate(`/admin/devotees/${row.id}`)}
+                      title="Open devotee — sevas, coins, history"
+                      className="border-b border-white/5 hover:bg-white/[0.04] transition-colors cursor-pointer"
                     >
                       {/* # */}
                       <td className="px-4 md:px-8 py-5">

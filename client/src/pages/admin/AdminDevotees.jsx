@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   Calendar,
@@ -395,15 +395,31 @@ const AdminDevotees = ({ mode = 'directory' }) => {
                           {u.full_name?.charAt(0).toUpperCase() || 'D'}
                         </div>
                         <div className="ml-5">
-                          <div className="text-sm font-black text-white tracking-widest uppercase mb-1 max-w-[260px] truncate" title={u.full_name}>
+                          <Link
+                            to={`/admin/devotees/${u.id}`}
+                            className="block text-sm font-black text-white tracking-widest uppercase mb-1 max-w-[260px] truncate hover:text-[#FBDB8C] transition-colors"
+                            title={`Open ${u.full_name} — sevas, coins, history`}
+                          >
                             {u.full_name}
-                          </div>
+                          </Link>
                           <div className="text-[10px] text-white/30 flex items-center gap-1.5 font-bold">
                             <Mail size={12} className="text-[#FBDB8C]" /> {u.email}
                           </div>
                           {u.phone_number && (
                             <div className="text-[10px] text-white/30 flex items-center gap-1.5 font-bold mt-1">
                               📞 {u.phone_number}
+                            </div>
+                          )}
+                          {!isKyc && (
+                            <div className="text-[10px] text-white/40 font-bold mt-1.5 tracking-wide">
+                              <span className="text-[#FBDB8C]/80">{u.confirmed_seva_count ?? 0}</span> seva
+                              {(u.confirmed_seva_count ?? 0) === 1 ? '' : 's'} paid
+                              {u.confirmed_seva_amount > 0 && (
+                                <> · ₹{Number(u.confirmed_seva_amount).toLocaleString('en-IN')}</>
+                              )}
+                              {u.pending_seva_count > 0 && <> · {u.pending_seva_count} pending</>}
+                              {' · '}
+                              <span className="text-[#FBDB8C]/80">{Number(u.total_coins || 0).toLocaleString()}</span> coins
                             </div>
                           )}
                         </div>
